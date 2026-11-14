@@ -162,10 +162,10 @@ button:disabled{opacity:.55;cursor:default}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794696700";</script>
-<script src="config.js?v=1794696700"></script>
+<script>window.APP_VERSION = "1794697701";</script>
+<script src="config.js?v=1794697701"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794696700"></script>
+<script src="platform.js?v=1794697701"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1449,18 +1449,27 @@ async function saveDuties(){
 
 /* ===== أنشطة المشروع: إعداد بنود الصرف والتوثيقات ===== */
 let expCfg = null, selCats = new Set();
-const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","جدول مستفيدين من المواصلات"],["INV","فاتورة"],["RCPT","إيصال دفع"]];
+const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","جدول مستفيدين من المواصلات"],["INV","فاتورة (من المورد أو يولّدها النظام)"],["RCPT","إيصال دفع"]];
+const FORM_CODE = {CONTRACT:"Contract", ATT:"Attendance", RCPT:"Receipt"};
+const DROPPED = ["سند ملكية","صور توثيقية","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","فاتورة المورد"];
 const NUMBERED = [["PR","طلب الشراء"],["PO","أمر الشراء"],["GRN","محضر استلام المواد"],["SRN","محضر استلام الخدمة"],["RCPT","إيصال الدفع"]];
 const SIGNERS = [["requester","الطالب"],["finance","المراجعة المالية"],["approver","المعتمد"],["receiver","المستلم (GRN)"],["supervisor","المشرف (SRN)"],["accountant","المحاسب (الإيصال)"]];
 const EXP_DEFAULT = () => ({
-  docTypes: ["صورة هوية","سيرة ذاتية","فاتورة المورد","صور توثيقية","كشف حضور المشاركين","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","سند ملكية"],
+  docTypes: ["صورة هوية","سيرة ذاتية","كشف حضور المشاركين"],
   categories: [["hosp","ضيافة"],["buffet","بوفيه"],["stat","قرطاسية"],["print","مطبوعات"],["expert","خبير"],["trainer","مدرب"],["transport","مواصلات"],["hall","إيجار قاعة"],["equip","إيجار معدات"],["observer","ملاحظ"],["cook","طباخ"],["internet","خدمات إنترنت"],["rent","إيجار مقر"],["permit","رسوم ترخيص"]]
     .map(([id, name]) => ({id, name, forms: [], docs: {}})),
   thresholds: [{upTo:"", quotes:1, tender:false, opening:false},{upTo:"", quotes:3, tender:false, opening:true},{upTo:"", quotes:3, tender:true, opening:true}]
 });
 const catDone = c => Object.keys(c.docs || {}).length > 0;
 const LINE_DEFAULT = {"2.2.1":"expert","2.2.2":"expert","3.1":"rent","3.2":"permit"};
-const ecfg = () => expCfg || EXP_DEFAULT();
+function ecfg(){
+  const c = JSON.parse(JSON.stringify(expCfg || EXP_DEFAULT()));
+  c.docTypes = (c.docTypes || []).filter(t => !DROPPED.includes(t));
+  (c.categories || []).forEach(k => { const d = k.docs || {};
+    if(d["فاتورة المورد"] && !d.INV) d.INV = d["فاتورة المورد"];
+    DROPPED.forEach(t => delete d[t]); k.docs = d; k.forms = FORMS.map(x => x[0]).filter(f => d[f]); });
+  return c;
+}
 const sameArr = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function thrTable(list, key){
@@ -1511,7 +1520,7 @@ function renderActs(p){
     </div>
     <h3>الموقّعون</h3>
     <div class="sgrid">${SIGNERS.map(([k, l]) => `<div><label>${l}: الاسم</label><input data-sg="${k}" name="n" value="${esc((sg[k] || {}).name || "")}" list="staffNames"></div><div><label>${l}: المنصب</label><input data-sg="${k}" name="t" value="${esc((sg[k] || {}).title || "")}"></div>`).join("")}</div>
-    <datalist id="staffNames">${Object.values(people).map(v => `<option value="${esc(v.name)}">`).join("")}</datalist>
+    <datalist id="staffNames">${projStaff(p).map(x => `<option value="${esc(x.name)}">${esc(x.title)}</option>`).join("")}</datalist>
     <h3>بداية الترقيم</h3>
     <div class="sgrid">${NUMBERED.map(([k, l]) => `<div><label>أول رقم: ${l}</label><input data-st="${k}" type="number" min="1" value="${esc(st[k] || 1)}"></div>`).join("")}</div>
     <h3>ربط بنود الموازنة بالفئات</h3>
@@ -1524,6 +1533,17 @@ function renderActs(p){
   </details>`;
   $("#x-own").onchange = e => { $("#x-thr").hidden = !e.target.checked; };
   catPick();
+}
+
+function projStaff(p){
+  return Object.entries(assignments).filter(([k, a]) => k.startsWith(p.code + "__") && a.personKey && people[a.personKey]).map(([k, a]) => {
+    const v = people[a.personKey], pos = (p.positions || []).find(x => pid(x) === (a.posId || a.posCode)) || {};
+    return {name: v.name, title: (v.gender === "m" ? pos.title_m : pos.title_f) || pos.title || a.title || ""};
+  });
+}
+function signerFill(inp){
+  const x = projStaff(projects[current]).find(s => s.name === inp.value.trim()); if(!x) return;
+  const t = document.querySelector(`[data-sg="${inp.dataset.sg}"][name="t"]`); if(t) t.value = x.title;
 }
 
 function catPick(){
@@ -1539,8 +1559,8 @@ function catPick(){
       <span class="inl"><span id="cat-msg" class="msg" aria-live="polite"></span><button type="button" data-act="catsave">حفظ للفئات المحددة</button><button type="button" class="x" data-act="catdel">حذف ${list.length > 1 ? "الفئات" : "الفئة"}</button></span></div>
     ${mixed ? '<p class="review">الفئات المحددة مختلفة. يُعرض ما في أولها، وما تحفظه يُطبَّق على الكل.</p>' : ""}
     <div class="tscroll"><table class="ptab ftab" style="min-width:320px"><tbody>
-      ${(cfg.docTypes || []).map(t => item(t, t, "")).join("")}
-      ${FORMS.map(([k, l]) => item(k, l, "نموذج يولّده النظام")).join("")}
+      ${FORMS.map(([k, l]) => item(k, (FORM_CODE[k] || k) + " — " + l, "نموذج")).join("")}
+      ${(cfg.docTypes || []).map(t => item(t, t, "مستند مرفق")).join("")}
     </tbody></table></div>
     <div class="inl"><input id="newdoc" placeholder="نوع مستند جديد"><button type="button" class="ghost" data-act="docadd">+ إضافة نوع مستند</button></div>
   </div>`;
@@ -1635,6 +1655,7 @@ document.addEventListener("change", e => {
 });
 document.addEventListener("input", e => {
   if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#docBox") || e.target.closest("#actBox")) editing = true;
+  if(e.target.dataset && e.target.dataset.sg && e.target.name === "n") signerFill(e.target);
   if(e.target.name === "lcode"){ const b = e.target.closest(".addline").querySelector("[data-addline]"); delete b.dataset.ok; b.textContent = "إضافة البند"; }
 });
 document.addEventListener("click", e => {
