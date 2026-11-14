@@ -168,10 +168,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794698591";</script>
-<script src="config.js?v=1794698591"></script>
+<script>window.APP_VERSION = "1794698616";</script>
+<script src="config.js?v=1794698616"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794698591"></script>
+<script src="platform.js?v=1794698616"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1699,7 +1699,7 @@ function exCard(p, e){
   const line = (p.positions || []).find(x => pid(x) === e.line);
   const mode = e.mode || "stage";
   const nextIdx = forms.findIndex(x => !files[x]);
-  const show = x => mode === "full" || forms.indexOf(x) <= (nextIdx < 0 ? forms.length : nextIdx);
+  const show = x => forms.includes(x) && (mode === "full" || forms.indexOf(x) <= (nextIdx < 0 ? forms.length : nextIdx));
   const has = x => forms.includes(x);
   const T = exTotals(e, true), thr = thresholdFor(p, T.total);
   const fileLink = (o, l) => o ? dlink(o.pdf || o.xlsx || o.id, l) : "";
