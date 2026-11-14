@@ -82,7 +82,7 @@
       let url = i.exportMimeType ? `${API}/files/${i.fileId}/export?mimeType=${encodeURIComponent(i.exportMimeType)}` : `${API}/files/${i.fileId}?alt=media`;
       if (i.sheetPdf) {
         const o = i.sheetPdf;
-        url = `https://docs.google.com/spreadsheets/d/${i.fileId}/export?format=pdf&size=A4&portrait=${o.portrait ? "true" : "false"}&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&fzr=false&horizontal_alignment=CENTER&vertical_alignment=TOP&top_margin=0.4&bottom_margin=0.4&left_margin=0.3&right_margin=0.3` + (o.range ? `&r1=0&c1=0&r2=${o.range[0]}&c2=${o.range[1]}` : "");
+        url = `https://docs.google.com/spreadsheets/d/${i.fileId}/export?format=pdf&size=A4&portrait=${o.portrait ? "true" : "false"}&scale=${o.scale || 4}&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&fzr=false&horizontal_alignment=CENTER&vertical_alignment=TOP&top_margin=0.4&bottom_margin=0.4&left_margin=0.3&right_margin=0.3` + (o.range ? (o.range.length === 4 ? `&r1=${o.range[0]}&c1=${o.range[1]}&r2=${o.range[2]}&c2=${o.range[3]}` : `&r1=0&c1=0&r2=${o.range[0]}&c2=${o.range[1]}`) : "");
       }
       const blob = await (await gfetch(url)).blob();
       return { __raw: true, content: [{ type: "resource", resource: { blob: await blobToB64(blob) } }] };
