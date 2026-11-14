@@ -79,7 +79,11 @@
     },
     async trash_file(i) { await gfetch(`${API}/files/${i.fileId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) }); return {}; },
     async download_file_content(i) {
-      const url = i.exportMimeType ? `${API}/files/${i.fileId}/export?mimeType=${encodeURIComponent(i.exportMimeType)}` : `${API}/files/${i.fileId}?alt=media`;
+      let url = i.exportMimeType ? `${API}/files/${i.fileId}/export?mimeType=${encodeURIComponent(i.exportMimeType)}` : `${API}/files/${i.fileId}?alt=media`;
+      if (i.sheetPdf) {
+        const o = i.sheetPdf;
+        url = `https://docs.google.com/spreadsheets/d/${i.fileId}/export?format=pdf&size=A4&portrait=${o.portrait ? "true" : "false"}&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=UNDEFINED&fzr=false&horizontal_alignment=CENTER&vertical_alignment=TOP&top_margin=0.4&bottom_margin=0.4&left_margin=0.3&right_margin=0.3`;
+      }
       const blob = await (await gfetch(url)).blob();
       return { __raw: true, content: [{ type: "resource", resource: { blob: await blobToB64(blob) } }] };
     },

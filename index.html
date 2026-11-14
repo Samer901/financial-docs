@@ -953,7 +953,7 @@ async function tsMake(btn){
       const gid = payloadId(gr);
       let pdfId = "";
       try{
-        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: false}});
         const pdf64 = findB64(ex, 0);
         if(pdf64){ const pu = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
       } finally { await trash(gid); }
@@ -1027,14 +1027,14 @@ async function buildX(tpl, xml){
   return zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
 }
 
-async function saveXP(blob, folder, base){
+async function saveXP(blob, folder, base, portrait){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
   const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
   const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
   const gid = payloadId(gr); let pdf = "";
   try{
-    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: !!portrait}});
     const p64 = findB64(ex, 0);
     if(p64){ const pu = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
   } finally { if(gid) await trash(gid); }
@@ -1093,7 +1093,7 @@ async function prMake(btn){
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
-      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`);
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`, true);
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
     }
     await db.doc("payroll/" + p.code + "__" + tsMonth).update({files});
