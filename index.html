@@ -162,10 +162,10 @@ button:disabled{opacity:.55;cursor:default}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794697701";</script>
-<script src="config.js?v=1794697701"></script>
+<script>window.APP_VERSION = "1794697834";</script>
+<script src="config.js?v=1794697834"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794697701"></script>
+<script src="platform.js?v=1794697834"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1519,8 +1519,7 @@ function renderActs(p){
       <div><label>اسم المكتب</label><input id="x-office" value="${esc(ex.office || "")}"></div>
     </div>
     <h3>الموقّعون</h3>
-    <div class="sgrid">${SIGNERS.map(([k, l]) => `<div><label>${l}: الاسم</label><input data-sg="${k}" name="n" value="${esc((sg[k] || {}).name || "")}" list="staffNames"></div><div><label>${l}: المنصب</label><input data-sg="${k}" name="t" value="${esc((sg[k] || {}).title || "")}"></div>`).join("")}</div>
-    <datalist id="staffNames">${projStaff(p).map(x => `<option value="${esc(x.name)}">${esc(x.title)}</option>`).join("")}</datalist>
+    <div class="sgrid">${SIGNERS.map(([k, l]) => `<div><label>${l}: الاسم</label>${signerSel(p, k, (sg[k] || {}).name || "")}</div><div><label>${l}: المنصب</label><input data-sg="${k}" name="t" value="${esc((sg[k] || {}).title || "")}"></div>`).join("")}</div>
     <h3>بداية الترقيم</h3>
     <div class="sgrid">${NUMBERED.map(([k, l]) => `<div><label>أول رقم: ${l}</label><input data-st="${k}" type="number" min="1" value="${esc(st[k] || 1)}"></div>`).join("")}</div>
     <h3>ربط بنود الموازنة بالفئات</h3>
@@ -1541,9 +1540,22 @@ function projStaff(p){
     return {name: v.name, title: (v.gender === "m" ? pos.title_m : pos.title_f) || pos.title || a.title || ""};
   });
 }
-function signerFill(inp){
-  const x = projStaff(projects[current]).find(s => s.name === inp.value.trim()); if(!x) return;
-  const t = document.querySelector(`[data-sg="${inp.dataset.sg}"][name="t"]`); if(t) t.value = x.title;
+function signerSel(p, k, cur){
+  const staff = projStaff(p), sn = new Set(staff.map(x => x.name));
+  const others = Object.values(people).map(v => v.name).filter(n => n && !sn.has(n)).sort((a, b) => a.localeCompare(b, "ar"));
+  const known = !cur || sn.has(cur) || others.includes(cur);
+  const o = n => `<option value="${esc(n)}" ${n === cur ? "selected" : ""}>${esc(n)}</option>`;
+  return `<select data-sg="${k}" name="n"><option value="">—</option>
+    ${staff.length ? `<optgroup label="موظفو المشروع">${staff.map(x => o(x.name)).join("")}</optgroup>` : ""}
+    ${others.length ? `<optgroup label="قائمة الأشخاص">${others.map(o).join("")}</optgroup>` : ""}
+    <option value="__new" ${known ? "" : "selected"}>+ اسم جديد</option></select>
+    <input data-sg="${k}" name="nn" value="${known ? "" : esc(cur)}" placeholder="الاسم" ${known ? "hidden" : ""} style="margin-top:4px">`;
+}
+function signerFill(sel){
+  const k = sel.dataset.sg, nn = document.querySelector(`[data-sg="${k}"][name="nn"]`);
+  nn.hidden = sel.value !== "__new"; if(!nn.hidden) nn.focus();
+  const x = projStaff(projects[current]).find(s => s.name === sel.value); if(!x) return;
+  const t = document.querySelector(`[data-sg="${k}"][name="t"]`); if(t) t.value = x.title;
 }
 
 function catPick(){
@@ -1608,7 +1620,7 @@ async function actClick(t){
   }
   if(a === "projsave"){
     const m = $("#xp-msg");
-    const signers = {}; SIGNERS.forEach(([k]) => { const n = document.querySelector(`[data-sg="${k}"][name="n"]`).value.trim(), ti = document.querySelector(`[data-sg="${k}"][name="t"]`).value.trim(); if(n || ti) signers[k] = {name: n, title: ti}; });
+    const signers = {}; SIGNERS.forEach(([k]) => { const sv = document.querySelector(`[data-sg="${k}"][name="n"]`).value, n = (sv === "__new" ? document.querySelector(`[data-sg="${k}"][name="nn"]`).value : sv).trim(), ti = document.querySelector(`[data-sg="${k}"][name="t"]`).value.trim(); if(n || ti) signers[k] = {name: n, title: ti}; });
     const start = {}; NUMBERED.forEach(([k]) => { start[k] = Math.max(1, Number(document.querySelector(`[data-st="${k}"]`).value) || 1); });
     const lines = {}; document.querySelectorAll("select[data-line]").forEach(s => { lines[s.dataset.line] = s.value; });
     const expense = {...(p.expense || {}), projectCode: $("#x-code").value.trim(), currency: $("#x-cur").value.trim(), office: $("#x-office").value.trim(), signers, start, lines,
@@ -1649,13 +1661,12 @@ document.addEventListener("change", e => {
   }
   if(e.target.closest("#tsBox") || e.target.closest("#prBox")) editing = true;
   if(e.target.closest(".card")) editing = true;
-  if(e.target.closest("#actBox")){ editing = true; if(e.target.name === "ecat") catPick(); }
+  if(e.target.closest("#actBox")){ editing = true; if(e.target.name === "ecat") catPick(); if(e.target.dataset.sg && e.target.name === "n") signerFill(e.target); }
   if(e.target.name === "person") syncCard(e.target.closest(".card"));
   if(e.target.name === "spos") e.target.closest("#addStaff").querySelector(".newpos").hidden = e.target.value !== "__new";
 });
 document.addEventListener("input", e => {
   if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#docBox") || e.target.closest("#actBox")) editing = true;
-  if(e.target.dataset && e.target.dataset.sg && e.target.name === "n") signerFill(e.target);
   if(e.target.name === "lcode"){ const b = e.target.closest(".addline").querySelector("[data-addline]"); delete b.dataset.ok; b.textContent = "إضافة البند"; }
 });
 document.addEventListener("click", e => {
