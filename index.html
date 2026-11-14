@@ -687,7 +687,7 @@ async function makeContract(btn){
       SALARY: `يحدد الراتب الشهري بقيمة ${Number(pos.salary).toLocaleString("en-US")} ${c.currency} (${words(pos.salary)} ${c.currency}) فقط لا غير، شهرياً.`,
       PERIOD: `${months} من تاريخ ${c.start} حتى ${c.end}`,
       P31: `يعي الطرفين بالحفاظ على المعلومات التي يقدمها كلاهما (وتحديداً الطرف الثاني)، ولا تعتبر متاحة للمشاركة إلا بكتاب وموافقة من الطرفين وبناءً على ما سبق تم التعاقد بين الطرفين بصورة منه وتم تحرير هذا العقد بصيغة واحدة وفقاً للبنود المذكورة بتاريخ ${c.date || c.start}`,
-      SIG: sig
+      SIG_A: rep.name, SIG_B: nm
     };
     say("جارٍ تجهيز العقد…");
     const xml = fillXml(await loadTemplate(), {tags, duties: dl});
@@ -953,7 +953,7 @@ async function tsMake(btn){
       const gid = payloadId(gr);
       let pdfId = "";
       try{
-        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: false}});
+        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: false, range: [28, 35]}});
         const pdf64 = findB64(ex, 0);
         if(pdf64){ const pu = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
       } finally { await trash(gid); }
@@ -1027,14 +1027,14 @@ async function buildX(tpl, xml){
   return zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
 }
 
-async function saveXP(blob, folder, base, portrait){
+async function saveXP(blob, folder, base, portrait, range){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
   const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
   const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
   const gid = payloadId(gr); let pdf = "";
   try{
-    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: !!portrait}});
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: !!portrait, range}});
     const p64 = findB64(ex, 0);
     if(p64){ const pu = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
   } finally { if(gid) await trash(gid); }
@@ -1080,7 +1080,7 @@ async function prMake(btn){
                       : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, I: null};
       for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
     }
-    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${tsMonth}`);
+    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${tsMonth}`, false, [24, 9]);
     await trashSet(files.payroll); files.payroll = pf;
     // الإيصالات والفواتير
     const vt = await loadX(templates.voucher);
@@ -1093,7 +1093,7 @@ async function prMake(btn){
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
-      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`, true);
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`, true, [38, 14]);
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
     }
     await db.doc("payroll/" + p.code + "__" + tsMonth).update({files});
