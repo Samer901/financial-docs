@@ -196,12 +196,11 @@ function render(force){
   if(!current || !projects[current]) current = codes[0];
   sel.innerHTML = codes.map(c => `<option value="${esc(c)}" ${c===current?"selected":""}>${esc(c)} — ${esc(projects[c].donor || "")}</option>`).join("");
   const p = projects[current];
-  const groups = {};
-  (p.positions || []).forEach(pos => { (groups[pos.group || "المناصب"] ||= []).push(pos); });
-  $("#content").innerHTML = Object.entries(groups).map(([g, list]) => `
-    <section class="group"><h2>${esc(g)}</h2><div class="grid">
-      ${list.map(pos => slotKeys(p, pos).map((k, i, arr) => card(p, pos, k, i, arr.length)).join("")).join("")}
-    </div>${addLineForm(g, list)}</section>`).join("");
+  const staffPos = (p.positions || []).filter(isStaff);
+  const cards = staffPos.flatMap(pos => slotKeys(p, pos).map((k, i, arr) => card(p, pos, k, i, arr.length)));
+  $("#content").innerHTML = `<section class="group"><h2>الموظفون</h2>
+    ${cards.length ? `<div class="grid">${cards.join("")}</div>` : '<p class="empty">لم يُضف موظفون بعد.</p>'}
+    ${addStaffForm(p, staffPos)}</section>`;
   document.querySelectorAll(".card").forEach(syncCard);
   renderSettings(p);
   renderPeople();
@@ -265,11 +264,62 @@ async function removeLine(btn){
   catch(e){ btn.disabled = false; btn.textContent = "تعذّر الحذف"; }
 }
 
+const STAFF_GROUP = "الموظفون";
+const isStaff = pos => (pos.group || STAFF_GROUP) === STAFF_GROUP;
+
+function addStaffForm(p, staffPos){
+  const used = new Set(Object.keys(assignments).filter(k => k.startsWith(p.code + "__") && assignments[k].personKey).map(k => k.slice(p.code.length + 2)));
+  Object.values(extraSlots).flat().forEach(k => used.add(k.slice(p.code.length + 2)));
+  const free = staffPos.filter(pos => !used.has(pid(pos)));
+  const sets = Object.keys(duties);
+  return `<details class="addline" id="addStaff"><summary>+ إضافة موظف</summary>
+    <div class="alg" style="grid-template-columns:1fr">
+      <div><label>المنصب وبند الموازنة</label><select name="spos">
+        ${free.map(x => `<option value="${esc(pid(x))}">${esc(x.code)} — ${esc(x.title)}${x.salary ? " — " + Number(x.salary).toLocaleString("en-US") : ""}</option>`).join("")}
+        <option value="__new">+ منصب جديد وبند موازنة جديد</option>
+      </select></div>
+    </div>
+    <div class="alg newpos" ${free.length ? "hidden" : ""}>
+      <div><label>رمز البند</label><input name="lcode" value="${esc(nextCode(staffPos, p.positions || []))}"></div>
+      <div><label>المسمى في الموازنة</label><input name="ltitle" placeholder="مثال: مسؤول/ة لوجستي"></div>
+      <div><label>الراتب الشهري</label><input name="lsal" type="number" min="0"></div>
+      <div><label>المسمى (مذكر)</label><input name="ltm"></div>
+      <div><label>المسمى (مؤنث)</label><input name="ltf"></div>
+      <div><label>المدة</label><input name="lunit" placeholder="مثال: 6 أشهر"></div>
+      <div><label>المهام</label><select name="ldt"><option value="">—</option>${sets.map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
+    </div>
+    <div class="row"><span class="msg" aria-live="polite"></span><button type="button" data-addstaff>إضافة</button></div>
+  </details>`;
+}
+
+async function addStaff(btn){
+  const box = btn.closest("#addStaff"), msg = box.querySelector(".msg"), p = projects[current];
+  const v = F(box, "spos").value;
+  msg.className = "msg err";
+  let posId = v;
+  if(v === "__new"){
+    const code = F(box,"lcode").value.trim(), title = F(box,"ltitle").value.trim();
+    if(!code || !title){ msg.textContent = "أدخل رمز البند والمسمى."; return; }
+    if(!/^[0-9.]+$/.test(code)){ msg.textContent = "رمز البند أرقام ونقاط فقط، مثل 1.5"; return; }
+    let id = code; const same = (p.positions || []).filter(x => x.code === code);
+    if(same.length){ let n = same.length + 1; while((p.positions || []).some(x => pid(x) === code + "-" + n)) n++; id = code + "-" + n; }
+    const sal = F(box,"lsal").value;
+    const line = {code, id, title, unit: F(box,"lunit").value.trim(), group: STAFF_GROUP, req: ["id","cv"], salary: sal ? Number(sal) : "",
+      title_m: F(box,"ltm").value.trim() || title.replace("/ة",""), title_f: F(box,"ltf").value.trim() || title.replace("/ة","ة"), duties: F(box,"ldt").value, added: true, addedAt: today()};
+    const positions = [...(p.positions || []), line].sort((a,b) => a.code.localeCompare(b.code, undefined, {numeric:true}));
+    await db.doc("projects/" + p.code).update({positions});
+    p.positions = positions; posId = id;
+  }
+  const base = p.code + "__" + posId;
+  (extraSlots[base] ||= []).push(base);
+  editing = false; render(true);
+  const c = document.querySelector(`.card[data-key="${CSS.escape(base)}"]`); if(c) c.scrollIntoView({block: "center"});
+}
+
 function slotKeys(p, pos){
   const base = p.code + "__" + pid(pos);
   const keys = Object.keys(assignments).filter(k => k === base || k.startsWith(base + "__")).sort();
   (extraSlots[base] || []).forEach(k => { if(!keys.includes(k)) keys.push(k); });
-  if(!keys.length) keys.push(base);
   return keys;
 }
 
@@ -360,7 +410,7 @@ function card(p, pos, key, idx, total){
     ${contractBox(p, pos, a)}
     <div class="row">
       <span class="msg" aria-live="polite"></span>
-      ${a.personKey ? `<button type="button" class="x" data-unassign="${k}">إزالة الشخص من البند</button>` : ""}
+      ${a.personKey ? `<button type="button" class="x" data-unassign="${k}">إزالة الموظف</button>` : `<button type="button" class="x" data-dropslot="${k}">إلغاء</button>`}
     </div>
   </div>`;
 }
@@ -453,7 +503,7 @@ function confirmClick(btn, label){
   const id = btn.dataset.del || btn.dataset.unassign || btn.dataset.rmline;
   if(armed.has(id)) { armed.delete(id); return true; }
   armed.add(id); btn.textContent = label; btn.classList.add("armed");
-  setTimeout(() => { armed.delete(id); btn.classList.remove("armed"); btn.textContent = btn.dataset.del ? "حذف" : (btn.dataset.rmline ? "حذف البند" : "إزالة الشخص من البند"); }, 4000);
+  setTimeout(() => { armed.delete(id); btn.classList.remove("armed"); btn.textContent = btn.dataset.del ? "حذف" : (btn.dataset.rmline ? "حذف البند" : "إزالة الموظف"); }, 4000);
   return false;
 }
 
@@ -989,7 +1039,7 @@ function renderPayroll(p){
   box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>الرواتب الشهرية — ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
     <p class="code">الشهر نفسه المختار في جداول الدوام. الإجازات في الإيصال تُؤخذ من جدول الدوام.</p>
     <div class="sgrid">
-      <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+      <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
     </div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>الراتب</th><th>سلفة</th><th>قرض</th><th>ملاحظات</th><th>الإيصال</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="code">لا يوجد موظفون لهم عقود.</td></tr>'}</tbody></table></div>
     <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel") : "") : ""}</span>
@@ -1317,7 +1367,7 @@ function renderSettings(p){
   const c = p.contract || {}, s = p.signatories || {}, pm = s.pmHiredBy || {};
   const sets = Object.keys(duties);
   const setOpts = sel => `<option value="">— بلا عقد —</option>` + sets.map(k => `<option ${k===sel?"selected":""}>${esc(k)}</option>`).join("");
-  const rows = (p.positions || []).map(pos => `<tr data-pid="${esc(pid(pos))}">
+  const rows = (p.positions || []).filter(isStaff).map(pos => `<tr data-pid="${esc(pid(pos))}">
       <td class="code">${esc(pos.code)}</td><td>${esc(pos.title)}</td>
       <td><input name="tm" value="${esc(pos.title_m||"")}" aria-label="المسمى للمذكر"></td>
       <td><input name="tf" value="${esc(pos.title_f||"")}" aria-label="المسمى للمؤنث"></td>
@@ -1335,7 +1385,7 @@ function renderSettings(p){
       <div><label>يوقّع عقد مدير المشروع</label><input id="s-name" value="${esc(pm.name||"")}"></div>
       <div><label>صفته</label><input id="s-cap" value="${esc(pm.capacity||"")}"></div>
       <div><label>الجنس</label><select id="s-g"><option value="f" ${pm.gender==="f"?"selected":""}>أنثى</option><option value="m" ${pm.gender==="m"?"selected":""}>ذكر</option></select></div>
-      <div><label>بند مدير المشروع</label><select id="s-pm">${(p.positions||[]).map(x => `<option value="${esc(pid(x))}" ${pid(x)===s.pmPositionCode?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+      <div><label>بند مدير المشروع</label><select id="s-pm">${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===s.pmPositionCode?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
     </div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>في الموازنة</th><th>المسمى (مذكر)</th><th>المسمى (مؤنث)</th><th>الراتب الشهري</th><th>المهام</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="row"><span id="set-msg" class="msg"></span><button type="button" id="saveSettings">حفظ الإعدادات</button></div>
@@ -1385,6 +1435,7 @@ document.addEventListener("change", e => {
   if(e.target.closest("#tsBox") || e.target.closest("#prBox")) editing = true;
   if(e.target.closest(".card")) editing = true;
   if(e.target.name === "person") syncCard(e.target.closest(".card"));
+  if(e.target.name === "spos") e.target.closest("#addStaff").querySelector(".newpos").hidden = e.target.value !== "__new";
 });
 document.addEventListener("input", e => {
   if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#docBox")) editing = true;
@@ -1398,6 +1449,8 @@ document.addEventListener("click", e => {
     return; }
   if(t.dataset.addrow !== undefined){ t.previousElementSibling.insertAdjacentHTML("beforeend", xrow()); editing = true; }
   else if(t.dataset.addline !== undefined) addLine(t);
+  else if(t.dataset.addstaff !== undefined) addStaff(t);
+  else if(t.dataset.dropslot){ for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => k !== t.dataset.dropslot); render(true); }
   else if(t.dataset.contract !== undefined) makeContract(t);
   else if(t.id === "saveSettings") saveSettings();
   else if(t.id === "exportXl") exportExcel(t);
