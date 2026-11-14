@@ -118,7 +118,8 @@ button:disabled{opacity:.55;cursor:default}
 .bar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:12px 0;display:flex;gap:12px;align-items:center;justify-content:space-between}
 .catgrid{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .catgrid .chk{border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--bg);font-size:14px}
-.catgrid .chk:has(input:checked){border-color:var(--accent);background:var(--surface)}
+.catgrid .chk.done{border-color:var(--ok);color:var(--ok)}
+.catgrid .chk:has(input:checked){border-color:var(--accent);background:var(--surface);outline:2px solid var(--accent)}
 .ced{border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;display:grid;gap:10px}
 .ced h3,.settings h3{font-size:14px;margin:6px 0 0;color:var(--muted);font-weight:600}
 .ftab td select,.ftab td input{min-width:0}
@@ -161,10 +162,10 @@ button:disabled{opacity:.55;cursor:default}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794696099";</script>
-<script src="config.js?v=1794696099"></script>
+<script>window.APP_VERSION = "1794696700";</script>
+<script src="config.js?v=1794696700"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794696099"></script>
+<script src="platform.js?v=1794696700"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1451,30 +1452,13 @@ let expCfg = null, selCats = new Set();
 const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","جدول مستفيدين من المواصلات"],["INV","فاتورة"],["RCPT","إيصال دفع"]];
 const NUMBERED = [["PR","طلب الشراء"],["PO","أمر الشراء"],["GRN","محضر استلام المواد"],["SRN","محضر استلام الخدمة"],["RCPT","إيصال الدفع"]];
 const SIGNERS = [["requester","الطالب"],["finance","المراجعة المالية"],["approver","المعتمد"],["receiver","المستلم (GRN)"],["supervisor","المشرف (SRN)"],["accountant","المحاسب (الإيصال)"]];
-const EXP_DEFAULT = () => {
-  const G = ["PR","RFQ","PO","GRN","INV","RCPT"], S = ["CONTRACT","SRN","RCPT"], H = ["PR","RFQ","PO","SRN","INV","RCPT"];
-  const c = (id, name, forms, docs) => ({id, name, forms, docs});
-  return {
-    docTypes: ["صورة هوية","سيرة ذاتية","فاتورة المورد","صور توثيقية","كشف حضور المشاركين","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","سند ملكية"],
-    categories: [
-      c("hosp","ضيافة",G,{"فاتورة المورد":"opt","صور توثيقية":"opt"}),
-      c("buffet","بوفيه",G,{"فاتورة المورد":"opt","صور توثيقية":"opt","كشف حضور المشاركين":"opt"}),
-      c("stat","قرطاسية",G,{"فاتورة المورد":"opt"}),
-      c("print","مطبوعات",G,{"فاتورة المورد":"opt","صور توثيقية":"opt"}),
-      c("expert","خبير",S,{"صورة هوية":"req","سيرة ذاتية":"req","تقرير عمل أو منتج":"req","كشف حضور المشاركين":"opt"}),
-      c("trainer","مدرب",S,{"صورة هوية":"req","سيرة ذاتية":"req","كشف حضور المشاركين":"req","تقرير عمل أو منتج":"opt","صور توثيقية":"opt"}),
-      c("transport","مواصلات",["PR","RFQ","PO","SRN","RCPT","ATT"],{"صورة هوية":"req","صور توثيقية":"opt"}),
-      c("hall","إيجار قاعة",H,{"صور توثيقية":"opt"}),
-      c("equip","إيجار معدات",H,{"صور توثيقية":"opt"}),
-      c("observer","ملاحظ",S,{"صورة هوية":"req","سيرة ذاتية":"opt"}),
-      c("cook","طباخ",S,{"صورة هوية":"req"}),
-      c("internet","خدمات إنترنت",H,{"ترخيص أو سجل تجاري":"opt"}),
-      c("rent","إيجار مقر",["CONTRACT","RCPT"],{"صورة هوية":"req","سند ملكية":"opt"}),
-      c("permit","رسوم ترخيص",["RCPT"],{"إيصال رسمي من الجهة":"req"})
-    ],
-    thresholds: [{upTo:"", quotes:1, tender:false, opening:false},{upTo:"", quotes:3, tender:false, opening:true},{upTo:"", quotes:3, tender:true, opening:true}]
-  };
-};
+const EXP_DEFAULT = () => ({
+  docTypes: ["صورة هوية","سيرة ذاتية","فاتورة المورد","صور توثيقية","كشف حضور المشاركين","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","سند ملكية"],
+  categories: [["hosp","ضيافة"],["buffet","بوفيه"],["stat","قرطاسية"],["print","مطبوعات"],["expert","خبير"],["trainer","مدرب"],["transport","مواصلات"],["hall","إيجار قاعة"],["equip","إيجار معدات"],["observer","ملاحظ"],["cook","طباخ"],["internet","خدمات إنترنت"],["rent","إيجار مقر"],["permit","رسوم ترخيص"]]
+    .map(([id, name]) => ({id, name, forms: [], docs: {}})),
+  thresholds: [{upTo:"", quotes:1, tender:false, opening:false},{upTo:"", quotes:3, tender:false, opening:true},{upTo:"", quotes:3, tender:true, opening:true}]
+});
+const catDone = c => Object.keys(c.docs || {}).length > 0;
 const LINE_DEFAULT = {"2.2.1":"expert","2.2.2":"expert","3.1":"rent","3.2":"permit"};
 const ecfg = () => expCfg || EXP_DEFAULT();
 const sameArr = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -1509,9 +1493,10 @@ function renderActs(p){
   const sg = ex.signers || {}, st = ex.start || {};
   box.innerHTML = `
   <details class="settings" open><summary>بنود الصرف والتوثيقات (لكل المشاريع)</summary>
-    <p class="code">حدّد فئة أو أكثر، ثم اختر النماذج والمستندات المطلوبة واحفظ. يُطبَّق المسار على كل عمليات الفئة.${expCfg ? "" : " القيم الحالية مقترحة ولم تُحفظ بعد."}</p>
-    <div class="catgrid">${cats.map(c => `<label class="chk"><input type="checkbox" name="ecat" value="${esc(c.id)}" ${selCats.has(c.id) ? "checked" : ""}> ${esc(c.name)}</label>`).join("")}</div>
+    <p class="code">حدّد فئة أو أكثر، ثم اختر التوثيقات المطلوبة واحفظ. الفئات المحددة توثيقاتها تظهر بإطار أخضر وعدد التوثيقات.${expCfg ? "" : ""}</p>
+    <div class="catgrid">${cats.map(c => `<label class="chk${catDone(c) ? " done" : ""}" title="${catDone(c) ? "محددة توثيقاتها" : "لم تُحدد توثيقاتها بعد"}"><input type="checkbox" name="ecat" value="${esc(c.id)}" ${selCats.has(c.id) ? "checked" : ""}> ${esc(c.name)}${catDone(c) ? ` <span class="code">✓ ${Object.keys(c.docs).length}</span>` : ""}</label>`).join("")}</div>
     <div class="inl"><input id="newcat" placeholder="اسم فئة جديدة"><button type="button" class="ghost" data-act="catadd">+ إضافة فئة</button></div>
+    <span id="cat-top" class="msg" aria-live="polite"></span>
     <div id="catEd"></div>
     <h3>عتبات الشراء العامة</h3>
     <p class="code">تُطبَّق على إجمالي الفاتورة بعملة المشروع. اترك «حتى مبلغ» فارغًا في آخر صف ليعني «فما فوق».</p>
@@ -1546,19 +1531,18 @@ function catPick(){
   const ed = $("#catEd"); if(!ed) return;
   const cfg = ecfg(), list = (cfg.categories || []).filter(c => selCats.has(c.id));
   if(!list.length){ ed.innerHTML = '<p class="empty">اختر فئة أو أكثر لعرض مسارها.</p>'; return; }
-  const f = list[0], mixed = list.some(c => !sameArr([...c.forms].sort(), [...f.forms].sort()) || JSON.stringify(c.docs || {}) !== JSON.stringify(f.docs || {}));
+  const f = list[0], mixed = list.some(c => JSON.stringify(c.docs || {}) !== JSON.stringify(f.docs || {}));
+  const item = (key, label, tag) => { const v = (f.docs || {})[key] || ""; return `<tr><td>${esc(label)}${tag ? ` <span class="code">(${tag})</span>` : ""}</td><td><select name="edoc" data-type="${esc(key)}">
+    <option value="" ${!v ? "selected" : ""}>غير مطلوب</option><option value="req" ${v === "req" ? "selected" : ""}>إلزامي</option><option value="opt" ${v === "opt" ? "selected" : ""}>اختياري</option></select></td></tr>`; };
   ed.innerHTML = `<div class="ced">
-    <div class="row"><strong>${list.map(c => esc(c.name)).join("، ")}</strong><button type="button" class="x" data-act="catdel">حذف ${list.length > 1 ? "الفئات المحددة" : "الفئة"}</button></div>
-    ${mixed ? '<p class="review">الفئات المحددة مختلفة. يُعرض مسار أولها، وما تحفظه يُطبَّق على الكل.</p>' : ""}
-    <h3>النماذج التي يولّدها النظام (بالترتيب)</h3>
-    <div class="wk">${FORMS.map(([k, l]) => `<label class="chk"><input type="checkbox" name="eform" value="${k}" ${f.forms.includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
-    <h3>المستندات المرفقة</h3>
-    <div class="tscroll"><table class="ptab ftab" style="min-width:360px"><tbody>
-      ${(cfg.docTypes || []).map(t => { const v = (f.docs || {})[t] || ""; return `<tr><td>${esc(t)}</td><td><select name="edoc" data-type="${esc(t)}">
-        <option value="" ${!v ? "selected" : ""}>غير مطلوب</option><option value="req" ${v === "req" ? "selected" : ""}>إلزامي</option><option value="opt" ${v === "opt" ? "selected" : ""}>اختياري</option></select></td></tr>`; }).join("")}
+    <div class="row"><strong>${list.map(c => esc(c.name)).join("، ")}</strong>
+      <span class="inl"><span id="cat-msg" class="msg" aria-live="polite"></span><button type="button" data-act="catsave">حفظ للفئات المحددة</button><button type="button" class="x" data-act="catdel">حذف ${list.length > 1 ? "الفئات" : "الفئة"}</button></span></div>
+    ${mixed ? '<p class="review">الفئات المحددة مختلفة. يُعرض ما في أولها، وما تحفظه يُطبَّق على الكل.</p>' : ""}
+    <div class="tscroll"><table class="ptab ftab" style="min-width:320px"><tbody>
+      ${(cfg.docTypes || []).map(t => item(t, t, "")).join("")}
+      ${FORMS.map(([k, l]) => item(k, l, "نموذج يولّده النظام")).join("")}
     </tbody></table></div>
     <div class="inl"><input id="newdoc" placeholder="نوع مستند جديد"><button type="button" class="ghost" data-act="docadd">+ إضافة نوع مستند</button></div>
-    <div class="row"><span id="cat-msg" class="msg" aria-live="polite"></span><button type="button" data-act="catsave">حفظ للفئات المحددة</button></div>
   </div>`;
 }
 
@@ -1576,7 +1560,7 @@ async function actClick(t){
     const name = $("#newcat").value.trim(); if(!name) return;
     if(cfg.categories.some(c => c.name === name)){ $("#newcat").value = ""; return; }
     const id = "c" + Date.now().toString(36);
-    cfg.categories.push({id, name, forms: ["RCPT"], docs: {}});
+    cfg.categories.push({id, name, forms: [], docs: {}});
     selCats = new Set([id]);
     if(await saveExp(cfg)) render(true);
     return;
@@ -1594,12 +1578,12 @@ async function actClick(t){
     return;
   }
   if(a === "catsave"){
-    const forms = FORMS.map(x => x[0]).filter(k => document.querySelector(`input[name="eform"][value="${k}"]`).checked);
-    const docs = {}; document.querySelectorAll('select[name="edoc"]').forEach(s => { if(s.value) docs[s.dataset.type] = s.value; });
-    const m = $("#cat-msg");
-    if(!forms.length){ m.className = "msg err"; m.textContent = "اختر نموذجًا واحدًا على الأقل."; return; }
+    const docs = {}; document.querySelectorAll('select[name="edoc"]').forEach(x => { if(x.value) docs[x.dataset.type] = x.value; });
+    const forms = FORMS.map(x => x[0]).filter(k => docs[k]);
+    const names = cfg.categories.filter(c => selCats.has(c.id)).map(c => c.name).join("، ");
     cfg.categories.forEach(c => { if(selCats.has(c.id)){ c.forms = forms; c.docs = docs; } });
-    await saveExp(cfg, m);
+    if(await saveExp(cfg)){ selCats.clear(); render(true); const m = $("#cat-top"); if(m){ m.className = "msg ok"; m.textContent = "تم حفظ: " + names; } }
+    else { const m = $("#cat-msg"); m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
     return;
   }
   if(a === "projsave"){
