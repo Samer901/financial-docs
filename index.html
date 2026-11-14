@@ -424,13 +424,19 @@ function syncCard(form){
   const p = projects[current];
   const akey = form.dataset.key;
   const a = assignments[akey];
+  const pos = (p.positions || []).find(x => pid(x) === form.dataset.pos) || {};
+  const replace = form.dataset.replace === "1";
   form.querySelector(".newp").hidden = !isNew;
-  form.querySelector(".up-id").hidden = !(isNew || v);
-  form.querySelector(".up-cv").hidden = !(isNew || v);
+  form.querySelector(".up-id").hidden = !(isNew || (v && (!v.idFileId || replace)));
+  form.querySelector(".up-cv").hidden = !(isNew || (v && (!v.cvFileId || replace)));
   form.querySelector(".lbl-id").textContent = v && v.idFileId ? "استبدال الهوية" : "صورة الهوية";
   form.querySelector(".lbl-cv").textContent = v && v.cvFileId ? "استبدال السيرة الذاتية" : "السيرة الذاتية";
   form.querySelector(".extra").hidden = !(isNew || v);
-  form.querySelector(".info").innerHTML = isNew ? "" : personInfo(k, p, a, akey);
+  const head = form.querySelector(".card-head > .chips, .card-head > .pill");
+  if(head) head.outerHTML = chips(isNew ? "" : k, pos, p, a);
+  const info = isNew ? "" : personInfo(k, p, a, akey);
+  const canReplace = v && (v.idFileId || v.cvFileId);
+  form.querySelector(".info").innerHTML = info + (canReplace ? `<button type="button" class="x" data-replace>${replace ? "إخفاء الاستبدال" : "استبدال الهوية أو السيرة"}</button>` : "");
 }
 
 function readB64(file){
@@ -1450,6 +1456,7 @@ document.addEventListener("click", e => {
   if(t.dataset.addrow !== undefined){ t.previousElementSibling.insertAdjacentHTML("beforeend", xrow()); editing = true; }
   else if(t.dataset.addline !== undefined) addLine(t);
   else if(t.dataset.addstaff !== undefined) addStaff(t);
+  else if(t.dataset.replace !== undefined){ const c = t.closest(".card"); c.dataset.replace = c.dataset.replace === "1" ? "" : "1"; syncCard(c); }
   else if(t.dataset.dropslot){ for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => k !== t.dataset.dropslot); render(true); }
   else if(t.dataset.contract !== undefined) makeContract(t);
   else if(t.id === "saveSettings") saveSettings();
