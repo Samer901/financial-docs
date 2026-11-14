@@ -147,9 +147,10 @@ button:disabled{opacity:.55;cursor:default}
     <div id="docBox"></div>
   </section>
 </div>
-<script src="config.js"></script>
+<script>window.APP_VERSION = "1794691091";</script>
+<script src="config.js?v=1794691091"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js"></script>
+<script src="platform.js?v=1794691091"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1428,6 +1429,21 @@ async function saveDuties(){
   try{ await db.doc("config/duties").set({sets}); m.className = "msg ok"; m.textContent = "تم الحفظ."; }
   catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
 }
+
+
+/* فحص وجود نسخة أحدث من التطبيق */
+async function checkVersion(){
+  try{
+    const r = await fetch("version.txt?t=" + Date.now(), {cache: "no-store"});
+    const v = (await r.text()).trim();
+    if(v && window.APP_VERSION && v !== window.APP_VERSION){
+      const n = $("#notice"); n.hidden = false; n.className = "notice";
+      n.innerHTML = 'توجد نسخة أحدث من التطبيق. <button type="button" id="doUpdate">تحديث الآن</button>';
+      $("#doUpdate").onclick = async () => { if(window.appStore) await window.appStore.flush().catch(() => {}); location.href = location.pathname + "?v=" + v; };
+    }
+  }catch(e){}
+}
+checkVersion(); setInterval(checkVersion, 5 * 60 * 1000);
 
 $("#project").addEventListener("change", e => { current = e.target.value; render(true); });
 document.getElementById("saveAll").addEventListener("click", saveAll);
