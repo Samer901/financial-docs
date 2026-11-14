@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>التوثيقات المالية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* layout: header with project picker, then grid of position cards grouped by budget section */
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --ink:#18231f; --muted:#5d6b66; --line:#d9e0dd;
+  --accent:#1d6b57; --accent-ink:#ffffff; --ok:#1f7a3d; --warn:#a15c00; --err:#b3261e;
+  --font:"IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111816; --surface:#1a2320; --ink:#e6eeeb; --muted:#9aaba5; --line:#2c3a36;
+    --accent:#4fb596; --accent-ink:#0d1714; --ok:#5cc47c; --warn:#e0a040; --err:#f08078;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#1a2320; --ink:#e6eeeb; --muted:#9aaba5; --line:#2c3a36;
+  --accent:#4fb596; --accent-ink:#0d1714; --ok:#5cc47c; --warn:#e0a040; --err:#f08078;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+#gate{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:50}
+.gate-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;max-width:420px;text-align:center;display:grid;gap:12px}
+.gate-card h2{margin:0}
+#syncStatus{font-size:13px;font-weight:400;margin-inline-start:8px}
+
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 48px;display:grid;gap:20px}
+header{display:flex;flex-wrap:wrap;gap:16px;align-items:end;justify-content:space-between}
+h1{font-size:24px;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;font-size:14px}
+label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+select,input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+select{min-width:280px}
+select:focus,input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.notice{background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--warn);border-radius:8px;padding:10px 14px;font-size:14px}
+.notice.err{border-inline-start-color:var(--err)}
+.group{display:grid;gap:12px}
+.group h2{font-size:16px;margin:8px 0 0;color:var(--muted);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;align-content:start}
+.card-head{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.title{font-weight:600;font-size:16px}
+.code{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.pill{font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
+.pill.saved{color:var(--warn);border-color:var(--warn)}
+.pill.up{color:var(--accent);border-color:var(--accent)}
+.pill.read{color:var(--ok);border-color:var(--ok)}
+.pill.err{color:var(--err);border-color:var(--err)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;justify-content:end}
+.review{font-size:13px;color:var(--err)}
+.req{color:var(--err);font-weight:700}
+.docs{margin:4px 0 0;padding-inline-start:18px;font-size:13px;display:grid;gap:2px}
+.docs a{color:var(--accent)}
+button.ghost{background:transparent;color:var(--accent);border:1px dashed var(--accent);padding:6px 12px;font-weight:500}
+button.x{background:transparent;color:var(--err);border:1px solid transparent;padding:2px 8px;font-size:12px;font-weight:500}
+button.x.armed{border-color:var(--err)}
+.xrows{display:grid;gap:8px;margin:8px 0}
+.xrow{display:grid;grid-template-columns:1.3fr 1fr;gap:6px;padding:8px;border:1px solid var(--line);border-radius:8px}
+.xrow input[type=file]{grid-column:1/-1;font-size:13px}
+.xrow select{min-width:0}
+.grid > button.ghost{align-self:start;justify-self:start}
+.dgrid{display:grid;grid-template-columns:repeat(7,30px);gap:3px;direction:rtl}
+.dh{font-size:11px;color:var(--muted);text-align:center}
+.dday{padding:4px 0;font-size:12px;font-weight:500;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+.dday.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.dday.wkend{background:transparent;color:var(--muted);border-style:dashed}
+.dday:disabled{opacity:.45;cursor:default}
+.hol{margin:4px 0 12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tab{background:transparent;color:var(--muted);border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:0;padding:8px 16px}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.tabpane{display:grid;gap:20px}
+.wk{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px}
+.chk{display:inline-flex;gap:4px;align-items:center;color:var(--ink);margin:0}
+.pform{background:var(--bg);border-radius:8px;padding:8px}
+.cbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--line);padding-top:8px}
+details.settings{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+details.settings > summary{cursor:pointer;font-weight:600}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:12px 0}
+.sgrid input,.sgrid select,.ptab input,.ptab select,.dset textarea,.dset input{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.tscroll{overflow-x:auto}
+.ptab{border-collapse:collapse;width:100%;font-size:14px;min-width:720px}
+.ptab th,.ptab td{border-bottom:1px solid var(--line);padding:6px;text-align:start;vertical-align:middle}
+.ptab th{color:var(--muted);font-weight:500;font-size:13px}
+details.duties{margin-top:12px;border-top:1px dashed var(--line);padding-top:8px}
+details.duties summary{cursor:pointer;color:var(--accent)}
+.dset{margin:8px 0}
+details.addline{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:10px 14px}
+details.addline summary{cursor:pointer;color:var(--accent);font-weight:500}
+.alg{display:grid;grid-template-columns:120px 1fr 1fr;gap:8px;margin:10px 0}
+@media (max-width:600px){.alg{grid-template-columns:1fr}}
+details.extra{border-top:1px dashed var(--line);padding-top:8px}
+details.extra summary{cursor:pointer;color:var(--accent);font-size:14px;font-weight:500}
+input[type=date]{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.file{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.file input{font:inherit;font-size:13px;max-width:100%}
+.current{font-size:13px;color:var(--muted)}
+.current a{color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+button{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:8px 18px;cursor:pointer}
+button:disabled{opacity:.55;cursor:default}
+.msg{font-size:13px}
+.msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
+.empty{color:var(--muted)}
+.bar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:12px 0;display:flex;gap:12px;align-items:center;justify-content:space-between}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>التوثيقات المالية <span id="syncStatus" class="code"></span></h1>
+      <p class="sub">البيانات الثابتة: الأشخاص والكادر والعقود. التوثيقات الشهرية: جداول الدوام والرواتب وتجميع ملفات التوثيق بزر واحد.</p>
+    </div>
+    <div>
+      <label for="project">المشروع</label>
+      <select id="project"><option value="">جارٍ تحميل المشاريع…</option></select>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" class="tab" data-tab="fixed" aria-selected="true">البيانات الثابتة والعقود</button>
+    <button type="button" role="tab" class="tab" data-tab="monthly" aria-selected="false">التوثيقات الشهرية</button>
+  </nav>
+  <div id="errbox" class="notice err" hidden></div>
+  <div id="notice" class="notice" hidden></div>
+  <section id="tab-fixed" class="tabpane">
+    <div id="settings"></div>
+    <div id="peopleBox"></div>
+    <div id="content"><p class="empty">جارٍ التحميل…</p></div>
+    <div class="bar"><span id="allmsg" class="msg" aria-live="polite"></span><button type="button" id="saveAll">حفظ الكل</button></div>
+  </section>
+  <section id="tab-monthly" class="tabpane" hidden>
+    <div id="tsBox"></div>
+    <div id="prBox"></div>
+    <div id="docBox"></div>
+  </section>
+</div>
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="platform.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const FOLD = {ids:"18eV2mGT2pvnhowEqtIzVY_1OtYgxkB82", cvs:"1_uv_DQ_B0F7XS_bczK7BkxSRBKfq46gL", personDocs:"1jirXMEXfcHWTdy1ry4CwRsn0efvTHGR0"};
+const INLINE_LIMIT = 700 * 1024;
+let db = null, mcp = null, fileArgs = false;
+let projects = {}, assignments = {}, people = {}, current = "", saving = false, dirty = false, editing = false;
+const extraSlots = {};
+let duties = {}, templates = {}, tplCache = null, excelCfg = {}, editPerson = "";
+let holidays = [], timesheets = {}, tsMonth = "", tsTpl = null, payrolls = {}, xTpl = {};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function notice(text, isErr){
+  if(isErr && text){
+    const b = $("#errbox"); b.hidden = false;
+    b.innerHTML = `<div class="row"><strong>حدث خطأ — ${new Date().toLocaleTimeString("ar")}</strong><button type="button" class="x" data-closeerr>إغلاق</button></div><div style="user-select:text">${esc(text)}</div>`;
+    b.scrollIntoView({block: "nearest"});
+    return;
+  }
+  const n = $("#notice");
+  if(!text){ n.hidden = true; return; }
+  n.hidden = false; n.textContent = text; n.className = "notice" + (isErr ? " err" : "");
+}
+
+const STATUS = {
+  saved: ["الاسم محفوظ، بانتظار الهوية", "saved"],
+  uploaded: ["الهوية مرفوعة", "up"],
+  read: ["تمت قراءة الهوية", "read"]
+};
+
+function render(force){
+  if(saving || (editing && !force)){ dirty = true; if(editing && !saving) notice("وصلت تحديثات جديدة. ستظهر بعد الحفظ."); return; }
+  editing = false; dirty = false;
+  const sel = $("#project");
+  const codes = Object.keys(projects).sort();
+  if(!codes.length){
+    sel.innerHTML = '<option value="">لا توجد مشاريع بعد</option>';
+    $("#content").innerHTML = '<p class="empty">لم تُضف مشاريع بعد. اطلب من Claude إضافة المشروع.</p>';
+    return;
+  }
+  if(!current || !projects[current]) current = codes[0];
+  sel.innerHTML = codes.map(c => `<option value="${esc(c)}" ${c===current?"selected":""}>${esc(c)} — ${esc(projects[c].donor || "")}</option>`).join("");
+  const p = projects[current];
+  const groups = {};
+  (p.positions || []).forEach(pos => { (groups[pos.group || "المناصب"] ||= []).push(pos); });
+  $("#content").innerHTML = Object.entries(groups).map(([g, list]) => `
+    <section class="group"><h2>${esc(g)}</h2><div class="grid">
+      ${list.map(pos => slotKeys(p, pos).map((k, i, arr) => card(p, pos, k, i, arr.length)).join("")).join("")}
+    </div>${addLineForm(g, list)}</section>`).join("");
+  document.querySelectorAll(".card").forEach(syncCard);
+  renderSettings(p);
+  renderPeople();
+  renderTimesheets(p);
+  renderPayroll(p);
+  renderDocs(p);
+}
+
+function nextCode(list, all){
+  const used = all.map(x => x.code);
+  const sorted = list.map(x => x.code).sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+  const last = sorted[sorted.length - 1] || "1.0";
+  const parts = last.split(".");
+  do { parts[parts.length-1] = String((+parts[parts.length-1] || 0) + 1); } while(used.includes(parts.join(".")));
+  return parts.join(".");
+}
+
+function addLineForm(g, list){
+  const gid = esc(g);
+  return `<details class="addline" data-group="${gid}"><summary>+ إضافة بند جديد إلى ${gid}</summary>
+    <div class="alg">
+      <div><label>رمز البند</label><input type="text" name="lcode" value="${esc(nextCode(list, projects[current].positions || []))}"></div>
+      <div><label>المسمى</label><input type="text" name="ltitle" placeholder="مثال: مسؤول/ة مالي 2"></div>
+      <div><label>المدة أو الوحدة</label><input type="text" name="lunit" placeholder="مثال: 4 أشهر"></div>
+    </div>
+    <div class="row"><span class="msg" aria-live="polite"></span><button type="button" data-addline>إضافة البند</button></div>
+  </details>`;
+}
+
+async function addLine(btn){
+  const box = btn.closest(".addline"), msg = box.querySelector(".msg");
+  const p = projects[current], g = box.dataset.group;
+  const code = F(box,"lcode").value.trim(), title = F(box,"ltitle").value.trim(), unit = F(box,"lunit").value.trim();
+  msg.className = "msg err";
+  if(!code || !title){ msg.textContent = "أدخل رمز البند ومسمّاه."; return; }
+  if(!/^[0-9.]+$/.test(code)){ msg.textContent = "رمز البند أرقام ونقاط فقط، مثل 1.5"; return; }
+  const same = (p.positions || []).filter(x => x.code === code);
+  if(same.length && btn.dataset.ok !== code){
+    btn.dataset.ok = code; btn.textContent = "تأكيد الإضافة";
+    msg.className = "msg"; msg.textContent = `الرمز ${code} مستخدم لبند "${same[0].title}". اضغط "تأكيد الإضافة" لإضافة بند آخر بنفس الرمز.`;
+    return;
+  }
+  delete btn.dataset.ok; btn.textContent = "إضافة البند";
+  let id = code;
+  if(same.length){ let n = same.length + 1; while((p.positions || []).some(x => pid(x) === code + "-" + n)) n++; id = code + "-" + n; }
+  const sample = (p.positions || []).find(x => (x.group || "المناصب") === g) || {};
+  const line = {code, id, title, unit, group: g, req: [...(sample.req || [])], added: true, addedAt: today()};
+  const positions = [...(p.positions || []), line].sort((a,b) => a.code.localeCompare(b.code, undefined, {numeric:true}));
+  btn.disabled = true;
+  try{ await db.doc("projects/" + p.code).update({positions}); editing = false; render(true); }
+  catch(e){ btn.disabled = false; msg.textContent = "تعذّرت إضافة البند."; }
+}
+
+async function removeLine(btn){
+  if(!confirmClick(btn, "اضغط مرة أخرى لحذف البند")) return;
+  const p = projects[current], id = btn.dataset.rmline, base = p.code + "__" + id;
+  if(Object.keys(assignments).some(k => (k === base || k.startsWith(base + "__")) && assignments[k].personKey)){ btn.textContent = "أزل الشخص أولاً"; return; }
+  const positions = (p.positions || []).filter(x => pid(x) !== id);
+  btn.disabled = true;
+  try{ await db.doc("projects/" + p.code).update({positions}); render(true); }
+  catch(e){ btn.disabled = false; btn.textContent = "تعذّر الحذف"; }
+}
+
+function slotKeys(p, pos){
+  const base = p.code + "__" + pid(pos);
+  const keys = Object.keys(assignments).filter(k => k === base || k.startsWith(base + "__")).sort();
+  (extraSlots[base] || []).forEach(k => { if(!keys.includes(k)) keys.push(k); });
+  if(!keys.length) keys.push(base);
+  return keys;
+}
+
+function personOptions(sel){
+  const list = Object.entries(people).sort((x,y) => (x[1].name||"").localeCompare(y[1].name||"", "ar"));
+  return `<option value="">— اختر الشخص —</option>` +
+    list.map(([k,v]) => `<option value="${esc(k)}" ${k===sel?"selected":""}>${esc(v.name)}${v.nameEn ? " — " + esc(v.nameEn) : ""}</option>`).join("") +
+    `<option value="__new" ${sel==="__new"?"selected":""}>+ شخص جديد (غير موجود في الهويات)</option>`;
+}
+
+const PERSON_TYPES = ["شهادة مزاولة مهنة", "شهادة علمية", "مستند شخصي آخر"];
+const PROJECT_TYPES = ["Vetting", "ملحق المانح", "مستند آخر للمشروع"];
+const today = () => new Date().toISOString().slice(0,10);
+const dlink = (id, label) => `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener">${esc(label)}</a>`;
+
+const pid = pos => pos.id || pos.code;
+
+function isReq(pos, kind){ return (pos.req || []).includes(kind); }
+
+function expNote(d, p){
+  if(!d.expiry) return "";
+  if(d.expiry < today()) return ` <span class="pill err">منتهي ${esc(d.expiry)}</span>`;
+  if(p.end && d.expiry < p.end) return ` <span class="pill err">ينتهي ${esc(d.expiry)} قبل نهاية المشروع</span>`;
+  return ` <span class="code">حتى ${esc(d.expiry)}</span>`;
+}
+
+function personInfo(key, p, a, akey){
+  const v = people[key]; if(!v) return "";
+  const link = (id, label) => id ? dlink(id, label) : `<span>${label}: غير موجودة</span>`;
+  let h = `<div class="current">${link(v.idFileId, "الهوية")} · ${link(v.cvFileId, "السيرة الذاتية")}</div>`;
+  const del = ref => ` <button type="button" class="x" data-del="${esc(ref)}" title="حذف المستند">حذف</button>`;
+  const docs = (v.docs || []).map((d, i) => `<li>${dlink(d.fileId, d.type)} <span class="code">(ثابت)</span>${expNote(d, p)}${del("person|" + key + "|" + i)}</li>`)
+    .concat(((a && a.personKey === key && a.docs) || []).map((d, i) => `<li>${dlink(d.fileId, d.type)} <span class="code">(هذا المشروع)</span>${expNote(d, p)}${del("assign|" + akey + "|" + i)}</li>`));
+  if(docs.length) h += `<ul class="docs">${docs.join("")}</ul>`;
+  if(v.review) h += `<div class="review">${esc(v.review)}</div>`;
+  return h;
+}
+
+function chips(pk, pos, p, a){
+  const v = people[pk];
+  if(!v) return `<span class="pill">فارغ</span>`;
+  const chip = (has, label, req) => `<span class="pill ${has ? "read" : (req ? "err" : "")}">${label} ${has ? "✓" : "✗"}</span>`;
+  let h = chip(!!v.idFileId, "الهوية", isReq(pos,"id")) + chip(!!v.cvFileId, "السيرة", isReq(pos,"cv"));
+  const projDocs = (a && a.personKey === pk && a.docs) || [];
+  (p.projRequired || []).forEach(t => { h += chip(projDocs.some(d => d.type === t), t, true); });
+  const allDocs = (v.docs || []).concat(projDocs);
+  if(allDocs.some(d => d.expiry && (d.expiry < today() || (p.end && d.expiry < p.end)))) h += `<span class="pill err">صلاحية مستند</span>`;
+  if(v.review) h += `<span class="pill err" title="${esc(v.review)}">يحتاج مراجعة</span>`;
+  else if(v.status === "read") h += `<span class="pill read">تم التحقق</span>`;
+  return `<span class="chips">${h}</span>`;
+}
+
+function xrow(){
+  const opts = list => list.map(t => `<option>${esc(t)}</option>`).join("");
+  return `<div class="xrow">
+    <select name="xtype" aria-label="نوع المستند"><option value="">— نوع المستند —</option>
+      <optgroup label="ثابت للشخص (يُستخدم في كل المشاريع)">${opts(PERSON_TYPES)}</optgroup>
+      <optgroup label="خاص بهذا المشروع">${opts(PROJECT_TYPES)}</optgroup>
+    </select>
+    <input type="date" name="xexp" aria-label="تاريخ الانتهاء إن وُجد" title="تاريخ الانتهاء (إن وُجد)">
+    <input type="file" name="xfile" aria-label="ملف المستند" accept="application/pdf,image/jpeg,image/png,.doc,.docx">
+  </div>`;
+}
+
+function card(p, pos, key, idx, total){
+  const a = assignments[key] || {};
+  const sel = a.personKey || "";
+  const c = esc(pos.code), k = esc(key), pi = esc(pid(pos));
+  const star = t => isReq(pos,t) ? ` <span class="req">*</span>` : ` <span class="code">(اختياري)</span>`;
+  const nth = total > 1 ? ` · الشخص ${idx + 1}` : "";
+  return `<div class="card" data-pos="${pi}" data-key="${k}">
+    <div class="card-head"><div><div class="title">${esc(pos.title)}</div><div class="code">بند ${c}${pos.unit ? " · " + esc(pos.unit) : ""}${nth}${pos.added ? ` · <span class="pill">مضاف خارج الموازنة الأصلية</span> <button type="button" class="x" data-rmline="${pi}">حذف البند</button>` : ""}</div></div>${chips(sel, pos, p, a)}</div>
+    <div><label for="s-${k}">الشخص</label>
+      <select id="s-${k}" name="person">${personOptions(sel)}</select></div>
+    <div class="info"></div>
+    <div class="newp" hidden>
+      <label for="n-${k}">الاسم الكامل</label>
+      <input type="text" id="n-${k}" name="pname" placeholder="الاسم الثلاثي كما في الهوية">
+    </div>
+    <div class="file up-id" hidden><label for="f-${k}" style="margin:0"><span class="lbl-id">صورة الهوية</span>${star("id")}</label>
+      <input type="file" id="f-${k}" name="file" accept="image/jpeg,image/png,application/pdf"></div>
+    <div class="file up-cv" hidden><label for="c-${k}" style="margin:0"><span class="lbl-cv">السيرة الذاتية</span>${star("cv")}</label>
+      <input type="file" id="c-${k}" name="cv" accept="application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png"></div>
+    <details class="extra" hidden><summary>إضافة مستندات أخرى</summary>
+      <div class="xrows">${xrow()}</div>
+      <button type="button" class="ghost" data-addrow>+ مستند آخر</button>
+    </details>
+    ${contractBox(p, pos, a)}
+    <div class="row">
+      <span class="msg" aria-live="polite"></span>
+      ${a.personKey ? `<button type="button" class="x" data-unassign="${k}">إزالة الشخص من البند</button>` : ""}
+    </div>
+  </div>`;
+}
+
+const F = (card, n) => card.querySelector(`[name="${n}"]`);
+
+function syncCard(form){
+  const k = F(form,"person").value;
+  const isNew = k === "__new";
+  const v = people[k];
+  const p = projects[current];
+  const akey = form.dataset.key;
+  const a = assignments[akey];
+  form.querySelector(".newp").hidden = !isNew;
+  form.querySelector(".up-id").hidden = !(isNew || v);
+  form.querySelector(".up-cv").hidden = !(isNew || v);
+  form.querySelector(".lbl-id").textContent = v && v.idFileId ? "استبدال الهوية" : "صورة الهوية";
+  form.querySelector(".lbl-cv").textContent = v && v.cvFileId ? "استبدال السيرة الذاتية" : "السيرة الذاتية";
+  form.querySelector(".extra").hidden = !(isNew || v);
+  form.querySelector(".info").innerHTML = isNew ? "" : personInfo(k, p, a, akey);
+}
+
+function readB64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1]);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+function errDetail(e){
+  if(!e) return "";
+  const parts = [e.code, e.message, e.server].filter(Boolean).map(String);
+  try{ if(e.result) parts.push(JSON.stringify(e.result).slice(0, 300)); }catch(_){}
+  return parts.length ? " [" + parts.join(" | ").slice(0, 600) + "]" : "";
+}
+function mcpMessage(e){
+  switch(e && e.code){
+    case "needs_reauth": return "انتهى ربط Google Drive. أعد ربطه من إعدادات claude.ai ← Connectors.";
+    case "server_not_connected": return "Google Drive غير مربوط بحسابك. اربطه من إعدادات claude.ai ← Connectors.";
+    case "not_in_manifest": return "لم يُسمح لهذه الصفحة باستخدام Google Drive. اسمح لها ثم أعد المحاولة.";
+    case "approval_required": return "الرفع يحتاج موافقتك. اضغط حفظ مرة أخرى ووافق على الطلب.";
+    case "server_unavailable": return "Google Drive لا يستجيب الآن. تأكد من الدرايف قبل إعادة المحاولة، فقد يكون الملف رُفع.";
+    case "tool_error": return "رفض Google Drive الطلب: " + (e.message || "");
+    default: return "تعذّر رفع الملف. قد يكون رُفع فعلاً؛ تحقق من الدرايف قبل إعادة المحاولة." + (e && e.code ? ` (${e.code}${e.message ? ": " + String(e.message).slice(0,160) : ""})` : "");
+  }
+}
+
+async function upload(f, folder, base){
+  if(!mcp){ throw {code:"no_mcp"}; }
+  const ext = (f.name.split(".").pop() || "bin").toLowerCase();
+  const title = `${base}.${ext}`;
+  const type = f.type || "application/octet-stream";
+  const call = async content => {
+    const r = await mcp.callTool("Google Drive", "create_file", {
+      title, parentId: folder, contentMimeType: type, disableConversionToGoogleType: true, base64Content: content });
+    let pl = r.payload;
+    if(typeof pl === "string"){ try{ pl = JSON.parse(pl); }catch(_){} }
+    return {id: (pl && pl.id) || "", title: (pl && pl.title) || title};
+  };
+  if(fileArgs){
+    try{ return await call({$file:{data:f, name:f.name, type}}); }
+    catch(e){
+      const fallback = ["bad_request","capability_disabled","transform_error"].includes(e && e.code) && f.size <= INLINE_LIMIT;
+      if(!fallback) throw e;
+    }
+  }
+  if(f.size > INLINE_LIMIT){ throw {code:"too_big"}; }
+  return await call(await readB64(f));
+}
+
+function checkFiles(id, cv){
+  if(id && cv && id.name === cv.name && id.size === cv.size) return "اخترت نفس الملف للهوية والسيرة الذاتية. تأكد من الملفين.";
+  if(id){
+    if(/\.(docx?|odt)$/i.test(id.name)) return "ملف Word لا يكون صورة هوية. هل وضعت السيرة الذاتية في حقل الهوية؟";
+    if(/(cv|resume|سيرة)/i.test(id.name)) return `اسم الملف "${id.name}" يوحي بأنه سيرة ذاتية، لكنه في حقل الهوية. تأكد منه.`;
+  }
+  if(cv && /(^|[^a-z])(id|identity|هوية)([^a-z]|$)/i.test(cv.name)) return `اسم الملف "${cv.name}" يوحي بأنه هوية، لكنه في حقل السيرة الذاتية. تأكد منه.`;
+  return "";
+}
+
+async function trash(fileId){
+  if(!mcp || !fileId) return;
+  try{ await mcp.callTool("Google Drive", "trash_file", {fileId}); }catch(_){ /* الملف يبقى في الدرايف؛ يُحذف السجل فقط */ }
+}
+
+const armed = new Set();
+function confirmClick(btn, label){
+  const id = btn.dataset.del || btn.dataset.unassign || btn.dataset.rmline;
+  if(armed.has(id)) { armed.delete(id); return true; }
+  armed.add(id); btn.textContent = label; btn.classList.add("armed");
+  setTimeout(() => { armed.delete(id); btn.classList.remove("armed"); btn.textContent = btn.dataset.del ? "حذف" : (btn.dataset.rmline ? "حذف البند" : "إزالة الشخص من البند"); }, 4000);
+  return false;
+}
+
+async function deleteDoc(btn){
+  if(!confirmClick(btn, "اضغط مرة أخرى للتأكيد")) return;
+  const [kind, key, i] = btn.dataset.del.split("|"); const idx = +i;
+  btn.disabled = true;
+  try{
+    if(kind === "person"){
+      const v = people[key]; const docs = [...(v.docs || [])]; const d = docs.splice(idx, 1)[0];
+      await db.doc("people/" + key).update({docs});
+      if(d) await trash(d.fileId);
+    } else {
+      const a = assignments[key]; const docs = [...(a.docs || [])]; const d = docs.splice(idx, 1)[0];
+      await db.doc("assignments/" + key).update({docs});
+      if(d) await trash(d.fileId);
+    }
+  }catch(e){ btn.disabled = false; btn.textContent = "تعذّر الحذف"; }
+}
+
+async function unassign(btn){
+  if(!confirmClick(btn, "اضغط مرة أخرى لإزالة الشخص")) return;
+  btn.disabled = true;
+  try{ await db.doc("assignments/" + btn.dataset.unassign).delete(); }
+  catch(e){ btn.disabled = false; btn.textContent = "تعذّرت الإزالة"; }
+}
+
+function checkExtra(x, type, id, cv){
+  if(!x) return "";
+  if((id && x.name === id.name && x.size === id.size) || (cv && x.name === cv.name && x.size === cv.size))
+    return "الملف الإضافي هو نفسه ملف الهوية أو السيرة. تأكد منه.";
+  if(/(cv|resume|سيرة)/i.test(x.name)) return `اسم الملف "${x.name}" يوحي بأنه سيرة ذاتية، لكنه مختار كـ "${type}". تأكد منه.`;
+  return "";
+}
+
+async function saveCard(form){
+  const posCode = form.dataset.pos;
+  const p = projects[current];
+  const pos = (p.positions || []).find(x => pid(x) === posCode);
+  const msg = form.querySelector(".msg");
+  const fail = t => { msg.className = "msg err"; msg.textContent = t; return "err"; };
+  msg.className = "msg"; msg.textContent = "";
+  let pk = F(form,"person").value;
+  const isNew = pk === "__new";
+  const name = isNew ? F(form,"pname").value.trim() : (people[pk] && people[pk].name) || "";
+  const file = F(form,"file").files[0];
+  const cv = F(form,"cv").files[0];
+  const rows = [...form.querySelectorAll(".xrow")].map(r => ({type: F(r,"xtype").value, exp: F(r,"xexp").value, file: F(r,"xfile").files[0]}))
+    .filter(r => r.type || r.file);
+  const key = form.dataset.key;
+  const prevA = assignments[key] || {};
+  if(!pk) return "skip";
+  if(!isNew && !file && !cv && !rows.length && prevA.personKey === pk) return "skip";
+  if(isNew && !name) return fail("أدخل اسم الشخص الجديد.");
+  if(isNew && Object.values(people).some(v => (v.name||"").replace(/\s+/g," ") === name.replace(/\s+/g," ")))
+    return fail("هذا الاسم موجود في القائمة. اختره منها بدل إضافته من جديد.");
+  const v0 = isNew ? {} : people[pk];
+  if(isReq(pos,"id") && !v0.idFileId && !file) return fail("صورة الهوية إلزامية لهذا المنصب.");
+  if(isReq(pos,"cv") && !v0.cvFileId && !cv) return fail("السيرة الذاتية إلزامية لهذا المنصب.");
+  if(isNew && !file) return fail("ارفع صورة الهوية للشخص الجديد.");
+  if(rows.some(r => r.file && !r.type)) return fail("اختر نوع كل مستند إضافي.");
+  if(rows.some(r => r.type && !r.file)) return fail("اختر ملفاً لكل مستند إضافي حددت نوعه.");
+  if(!db) return fail("الحفظ غير متاح في هذا العرض.");
+  const bad = checkFiles(file, cv) || rows.map(r => checkExtra(r.file, r.type, file, cv)).find(Boolean);
+  if(bad) return fail(bad);
+  try{
+    const person = isNew ? {name, nameEn:"", nid:"", idFileId:"", cvFileId:"", status:"pending", docs:[]} : {...people[pk], docs:[...(people[pk].docs || [])]};
+    if(isNew) pk = "new-" + Date.now().toString(36);
+    const safe = name.replace(/[\\/:*?"<>|]/g, " ").trim();
+    const rec = {project:p.code, posCode:pos.code, posId:pid(pos), title:pos.title, personKey:pk, name,
+                 folderId: prevA.personKey === pk ? (prevA.folderId || "") : "",
+                 docs: prevA.personKey === pk ? [...(prevA.docs || [])] : [], updatedAt:new Date().toISOString()};
+    let personChanged = isNew;
+    if(file){
+      msg.textContent = "جارٍ رفع الهوية…";
+      const r = await upload(file, FOLD.ids, `ID_${safe}`);
+      const old = person.idFileId;
+      person.idFileId = r.id; person.idFileName = r.title; personChanged = true;
+      if(old){ person.status = "pending"; person.review = ""; await trash(old); }
+    }
+    if(cv){
+      msg.textContent = "جارٍ رفع السيرة الذاتية…";
+      const r = await upload(cv, FOLD.cvs, `CV_${safe}`);
+      const old = person.cvFileId;
+      person.cvFileId = r.id; person.cvFileName = r.title; personChanged = true;
+      if(old){ person.status = "pending"; person.review = ""; await trash(old); }
+    }
+    for(const row of rows){
+      msg.textContent = `جارٍ رفع ${row.type}…`;
+      const doc = {type: row.type, expiry: row.exp || "", addedAt: today()};
+      if(PERSON_TYPES.includes(row.type)){
+        const r = await upload(row.file, FOLD.personDocs, `${row.type}_${safe}`);
+        doc.fileId = r.id; doc.fileName = r.title;
+        person.docs.push(doc); personChanged = true;
+      } else {
+        if(!rec.folderId){
+          const fr = await mcp.callTool("Google Drive", "create_file", {
+            title: `${pos.code} - ${name}`, parentId: (p.folders || {}).staff, contentMimeType: "application/vnd.google-apps.folder"});
+          let pl = fr.payload; if(typeof pl === "string"){ try{ pl = JSON.parse(pl); }catch(_){} }
+          rec.folderId = (pl && pl.id) || "";
+          if(!rec.folderId) throw {code:"tool_error", message:"لم يُنشأ مجلد الشخص."};
+        }
+        const r = await upload(row.file, rec.folderId, `${row.type}_${safe}`);
+        doc.fileId = r.id; doc.fileName = r.title;
+        rec.docs.push(doc);
+      }
+    }
+    if(personChanged) await db.doc("people/" + pk).set(person);
+    rec.status = person.status === "read" ? "read" : (person.idFileId ? "uploaded" : "saved");
+    await db.doc("assignments/" + key).set(rec);
+    msg.className = "msg ok"; msg.textContent = "تم الحفظ.";
+    return "ok";
+  }catch(e){
+    msg.className = "msg err";
+    if(e && e.code === "too_big") msg.textContent = "حجم الملف كبير. صغّره إلى أقل من 700 كيلوبايت أو ارفعه إلى الدرايف مباشرة.";
+    else if(e && e.code === "no_mcp") msg.textContent = "رفع الملفات غير متاح هنا. افتح الصفحة من claude.ai.";
+    else if(e && e.code === "quota_exceeded") msg.textContent = "امتلأت مساحة الحفظ في الصفحة.";
+    else if(e && e.code === "invalid_argument") msg.textContent = "ليست لديك صلاحية الحفظ في هذه الصفحة.";
+    else msg.textContent = mcpMessage(e);
+    return "err";
+  }
+}
+
+async function saveAll(){
+  const btn = document.getElementById("saveAll"), out = document.getElementById("allmsg");
+  btn.disabled = true; saving = true; dirty = false; out.className = "msg"; out.textContent = "جارٍ الحفظ…";
+  let ok = 0, err = 0;
+  for(const card of document.querySelectorAll(".card")){
+    const r = await saveCard(card);
+    if(r === "ok") ok++; else if(r === "err") err++;
+  }
+  btn.disabled = false; saving = false;
+  if(!err){ editing = false; for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => !assignments[k]); render(true); notice(""); }
+  if(!ok && !err){ out.textContent = "لا توجد تغييرات للحفظ."; return; }
+  out.className = "msg " + (err ? "err" : "ok");
+  out.textContent = `تم حفظ ${ok}` + (err ? `، وتعذّر حفظ ${err}. راجع البطاقات المعلّمة.` : ".");
+}
+
+
+
+/* ===== العقود ===== */
+const ONES=["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة","عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر","ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+const TENS=["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+const HUND=["","مائة","مائتان","ثلاثمائة","أربعمائة","خمسمائة","ستمائة","سبعمائة","ثمانمائة","تسعمائة"];
+function b1000(n){ const r=[]; if(n>=100){ r.push(HUND[Math.floor(n/100)]); n%=100; }
+  if(n){ if(n<20) r.push(ONES[n]); else { const o=n%10,t=Math.floor(n/10); r.push((o?ONES[o]+" و":"")+TENS[t]); } } return r.join(" و"); }
+function words(n){ n=Math.round(n); if(!n) return "صفر"; const r=[]; const m=Math.floor(n/1e6); n%=1e6; const th=Math.floor(n/1000), rest=n%1000;
+  if(m) r.push(m===1?"مليون":m===2?"مليونان":(m<=10?b1000(m)+" ملايين":b1000(m)+" مليون"));
+  if(th) r.push(th===1?"ألف":th===2?"ألفان":(th<=10?b1000(th)+" آلاف":b1000(th)+" ألف"));
+  if(rest) r.push(b1000(rest)); return r.join(" و"); }
+const MONTHS={1:"شهر واحد",2:"شهران",3:"ثلاثة أشهر",4:"أربعة أشهر",5:"خمسة أشهر",6:"ستة أشهر",7:"سبعة أشهر",8:"ثمانية أشهر",9:"تسعة أشهر",10:"عشرة أشهر",11:"أحد عشر شهراً",12:"اثنا عشر شهراً"};
+const gw = (gd, m, f) => gd === "f" ? f : m;
+const shortName = v => v.shortName || (() => { const t=(v.name||"").trim().split(/\s+/); return t.length>1 ? t[0]+" "+t[t.length-1] : (v.name||""); })();
+const xmlEsc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function contractDoc(a){ return ((a && a.docs) || []).find(d => d.type === "عقد العمل"); }
+
+function contractBox(p, pos, a){
+  if(!pos.title_m || !pos.duties) return "";
+  const cd = contractDoc(a);
+  const links = cd ? `<span class="current">العقد: ${dlink(cd.fileId, "PDF")}${cd.wordId ? " · " + dlink(cd.wordId, "Word") : ""}</span>` : "";
+  return `<div class="cbox">${links}<button type="button" class="ghost" data-contract="${esc(a && a.personKey ? "1" : "")}" ${a && a.personKey ? "" : "disabled"}>${cd ? "إعادة إنشاء العقد" : "إنشاء العقد"}</button><span class="cmsg msg" aria-live="polite"></span></div>`;
+}
+
+function repFor(p, pos){
+  const s = p.signatories || {};
+  if(pid(pos) === s.pmPositionCode) return s.pmHiredBy ? {name:s.pmHiredBy.name, gender:s.pmHiredBy.gender, capacity:s.pmHiredBy.capacity} : null;
+  const pmA = assignments[p.code + "__" + s.pmPositionCode];
+  const pm = pmA && people[pmA.personKey];
+  if(!pm) return null;
+  return {name: shortName(pm), gender: pm.gender || "f", capacity: gw(pm.gender, "مدير المشروع", "مديرة المشروع")};
+}
+
+function findB64(o, depth){
+  if(depth > 6 || o == null) return "";
+  if(typeof o === "string") return (o.length > 200 && /^[A-Za-z0-9+/=\s]+$/.test(o.slice(0, 400))) ? o : "";
+  if(typeof o === "object"){ for(const k of Object.keys(o)){ const r = findB64(o[k], depth + 1); if(r) return r; } }
+  return "";
+}
+function payloadId(r){ let pl = r.payload; if(typeof pl === "string"){ try{ pl = JSON.parse(pl); }catch(_){} } return pl && pl.id; }
+function b64ToBlob(b64, type){ const bin = atob(b64.replace(/\s/g,"")); const u = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new Blob([u], {type}); }
+
+async function loadTemplate(){
+  if(tplCache && tplCache.id === templates.contract) return tplCache.xml;
+  if(!templates.contract) throw {code:"tool_error", message:"لم يُحدد قالب العقد."};
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: templates.contract});
+  const b64 = findB64(r, 0);
+  if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة قالب العقد من الدرايف."};
+  const zip = await JSZip.loadAsync(b64.replace(/\s/g,""), {base64:true});
+  tplCache = {id: templates.contract, b64: b64.replace(/\s/g,""), xml: await zip.file("word/document.xml").async("string")};
+  return tplCache.xml;
+}
+
+function fillXml(xml, v){
+  let x = xml;
+  for(const [k, t] of Object.entries(v.tags)) x = x.split("{{" + k + "}}").join(xmlEsc(t));
+  const i = x.indexOf("{{DUTY}}");
+  if(i >= 0){
+    const st = Math.max(x.lastIndexOf("<w:p ", i), x.lastIndexOf("<w:p>", i)), en = x.indexOf("</w:p>", i) + 6;
+    const para = x.slice(st, en);
+    x = x.slice(0, st) + v.duties.map(d => para.split("{{DUTY}}").join(xmlEsc(d))).join("") + x.slice(en);
+  }
+  return x;
+}
+
+async function makeContract(btn){
+  const cardEl = btn.closest(".card"), cmsg = cardEl.querySelector(".cmsg");
+  const say = (t, err) => { cmsg.className = "cmsg msg" + (err ? " err" : ""); cmsg.textContent = t; if(err) notice("العقد: " + t, true); };
+  const p = projects[current], pos = (p.positions || []).find(x => pid(x) === cardEl.dataset.pos);
+  const key = cardEl.dataset.key, a = assignments[key], v = a && people[a.personKey];
+  const c = p.contract || {};
+  if(!v) return say("اختر الشخص واحفظ أولاً.", true);
+  if(!mcp) return say("الوصول إلى Google Drive غير متاح في هذا العرض.", true);
+  if(v.status !== "read") return say("الهوية لم تُقرأ ويُتحقق منها بعد.", true);
+  if(!v.gender) return say("جنس الموظف غير مسجّل.", true);
+  if(!c.start || !c.end || !c.currency) return say("أكمل إعدادات العقود للمشروع أولاً (في أعلى الصفحة).", true);
+  if(!pos.salary) return say("الراتب غير محدد لهذا البند في الإعدادات.", true);
+  const dl = duties[pos.duties]; if(!dl || !dl.length) return say("مهام هذا المنصب غير محددة.", true);
+  const rep = repFor(p, pos); if(!rep) return say("سجّل مدير المشروع (وارفع هويته) قبل عقود بقية الموظفين.", true);
+  const cd = contractDoc(a);
+  if(cd && btn.dataset.ok !== "1"){ btn.dataset.ok = "1"; btn.textContent = "تأكيد: استبدال العقد الحالي"; return say("العقد الحالي سيُنقل إلى سلة المهملات."); }
+  delete btn.dataset.ok; btn.disabled = true;
+  try{
+    const gd = v.gender, title = gw(gd, pos.title_m, pos.title_f), nm = shortName(v);
+    const nat = v.nationality || gw(gd, "سوري", "سورية");
+    const months = MONTHS[c.months] || (c.months ? c.months + " أشهر" : "");
+    const sig = (() => { const pad = Math.max(10, 104 - (rep.name.length - 10) - (nm.length - 9)); return " ".repeat(49) + rep.name + " ".repeat(pad) + nm + "  "; })();
+    const tags = {
+      P4: `من أجل تنفيذ الخطة الاستراتيجية لفريق سوريانا الأمل وبالاستناد على نظرية التغيير التي يعمل عليها الفريق والتي تعتمد على بناء قدرات النساء وتمكينهن وخلق مساحة داعمة وتقديم خدمات أفضل للوصول الى مشاركة فاعلة بعملية صنع واتخاذ القرار، يحتاج الفريق ل${title}${c.label ? " ل" + c.label : ""}، ضمن فريق سوريانا الأمل`,
+      P5: `وبما أن ${gw(gd,"السيد","السيدة")} ${nm} ${gw(gd,"جنسيته","جنسيتها")} ${nat}، ${gw(gd,"والمشار إليه","والمشار إليها")} بالطرف الثاني في هذا العقد ${gw(gd,"لديه","لديها")} الخبرة اللازمة والمهارات والامكانيات للعمل ك${title} ضمن المشروع سيتم التعاقد ${gw(gd,"معه","معها")} ضمن فريق سوريانا الأمل والمشار إليه في هذا العقد بالطرف الأول ${gw(rep.gender,"والممثل عنه السيد","والممثلة عنه السيدة")} ${rep.name} ${gw(rep.gender,"بصفته","بصفتها")} ${rep.capacity}`,
+      SALARY: `يحدد الراتب الشهري بقيمة ${Number(pos.salary).toLocaleString("en-US")} ${c.currency} (${words(pos.salary)} ${c.currency}) فقط لا غير، شهرياً.`,
+      PERIOD: `${months} من تاريخ ${c.start} حتى ${c.end}`,
+      P31: `يعي الطرفين بالحفاظ على المعلومات التي يقدمها كلاهما (وتحديداً الطرف الثاني)، ولا تعتبر متاحة للمشاركة إلا بكتاب وموافقة من الطرفين وبناءً على ما سبق تم التعاقد بين الطرفين بصورة منه وتم تحرير هذا العقد بصيغة واحدة وفقاً للبنود المذكورة بتاريخ ${c.date || c.start}`,
+      SIG: sig
+    };
+    say("جارٍ تجهيز العقد…");
+    const xml = fillXml(await loadTemplate(), {tags, duties: dl});
+    const zip = await JSZip.loadAsync(tplCache.b64, {base64:true});
+    zip.file("word/document.xml", xml);
+    const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const blob = await zip.generateAsync({type:"blob", mimeType: DOCX, compression:"DEFLATE", compressionOptions:{level:9}});
+    const base = `${pos.code} - عقد عمل - ${v.nameEn || nm}`;
+    let folderId = a.folderId;
+    if(!folderId){
+      const fr = await mcp.callTool("Google Drive", "create_file", {title: `${pos.code} - ${v.nameEn || nm}`, parentId: (p.folders || {}).staff, contentMimeType: "application/vnd.google-apps.folder"});
+      folderId = payloadId(fr); if(!folderId) throw {code:"tool_error", message:"لم يُنشأ مجلد الموظف."};
+    }
+    say("جارٍ حفظ نسخة Word…");
+    const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folderId, base);
+    say("جارٍ تحويل العقد إلى PDF…");
+    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+    const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folderId, contentMimeType: DOCX, base64Content: b64});
+    const gid = payloadId(gr);
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+    const pdf64 = findB64(ex, 0);
+    if(!pdf64) throw {code:"tool_error", message:"تعذّر تحويل العقد إلى PDF. نسخة Word محفوظة."};
+    const pdf = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folderId, base);
+    await trash(gid);
+    const docs = ((a.docs) || []).filter(d => d.type !== "عقد العمل");
+    docs.push({type:"عقد العمل", fileId: pdf.id, fileName: pdf.title, wordId: w.id, expiry:"", addedAt: today()});
+    await db.doc("assignments/" + key).update({docs, folderId});
+    if(cd){ await trash(cd.fileId); if(cd.wordId) await trash(cd.wordId); }
+    say("تم إنشاء العقد.");
+  }catch(e){ btn.disabled = false; say(e && e.message && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
+}
+
+
+/* ===== الأشخاص ===== */
+const PF = [["firstName","الاسم"],["father","اسم الأب"],["lastName","النسبة"],["mother","اسم الأم"],["dob","تاريخ الولادة","date"],["birthPlace","محل الولادة"],
+  ["gender","الجنس","g"],["nationality","الجنسية"],["amana","الأمانة"],["qaid","محل القيد"],["nid","الرقم الشخصي"],["cardNo","رقم البطاقة"],
+  ["firstEn","Name (EN)"],["lastEn","Surname (EN)"],["shortName","الاسم في العقود"],["status","حالة البيانات","s"],["notes","ملاحظات"]];
+
+function renderPeople(){
+  const box = $("#peopleBox"); if(!box) return;
+  const open = box.querySelector("details") && box.querySelector("details").open;
+  const list = Object.entries(people).sort((x,y) => (x[1].name||"").localeCompare(y[1].name||"", "ar"));
+  const rows = list.map(([k,v]) => `<tr><td>${esc(v.name)}</td><td class="code">${esc(v.nameEn||"")}</td><td class="code">${esc(v.nid||"—")}</td>
+    <td>${v.review ? '<span class="pill err">يحتاج مراجعة</span>' : (v.status==="read" ? '<span class="pill read">تم التحقق</span>' : '<span class="pill">بانتظار التحقق</span>')}</td>
+    <td><button type="button" class="ghost" data-editp="${esc(k)}">تعديل</button></td></tr>
+    ${editPerson===k ? `<tr><td colspan="5">${personForm(k, v)}</td></tr>` : ""}`).join("");
+  const xl = excelCfg.fileId ? dlink(excelCfg.fileId, "ملف Excel الحالي") + (excelCfg.updatedAt ? ` <span class="code">(آخر تحديث ${esc(excelCfg.updatedAt)})</span>` : "") : "";
+  box.innerHTML = `<details class="settings" ${open || editPerson ? "open" : ""}><summary>الأشخاص وبيانات الهويات (${list.length})</summary>
+    <div class="row" style="margin:10px 0"><span class="current">${xl}</span><span><span id="xl-msg" class="msg"></span> <button type="button" id="exportXl">تحديث ملف Excel</button></span></div>
+    <div class="tscroll"><table class="ptab"><thead><tr><th>الاسم</th><th>بالإنجليزية</th><th>الرقم الشخصي</th><th>الحالة</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </details>`;
+}
+
+function personForm(k, v){
+  const field = ([f, label, t]) => {
+    const val = v[f] ?? "";
+    let input;
+    if(t === "g") input = `<select name="${f}"><option value="f" ${val==="f"?"selected":""}>أنثى</option><option value="m" ${val==="m"?"selected":""}>ذكر</option></select>`;
+    else if(t === "s") input = `<select name="${f}"><option value="read" ${val==="read"?"selected":""}>تم التحقق</option><option value="pending" ${val!=="read"?"selected":""}>بانتظار التحقق</option></select>`;
+    else input = `<input name="${f}" type="${t==="date"?"date":"text"}" value="${esc(val)}">`;
+    return `<div><label>${label}</label>${input}</div>`;
+  };
+  return `<div class="pform" data-pk="${esc(k)}"><div class="sgrid">${PF.map(field).join("")}</div>
+    <div class="row"><span class="msg pmsg"></span><span><button type="button" class="x" data-cancelp>إلغاء</button> <button type="button" data-savep>حفظ</button></span></div></div>`;
+}
+
+async function savePerson(btn){
+  const f = btn.closest(".pform"), k = f.dataset.pk, m = f.querySelector(".pmsg");
+  const d = {}; PF.forEach(([n]) => d[n] = (f.querySelector(`[name="${n}"]`).value || "").trim());
+  if(!d.firstName || !d.lastName){ m.className = "msg pmsg err"; m.textContent = "الاسم والنسبة مطلوبان."; return; }
+  if(d.nid && Object.entries(people).some(([kk, v]) => kk !== k && v.nid === d.nid)){ m.className = "msg pmsg err"; m.textContent = "هذا الرقم الشخصي مسجّل لشخص آخر."; return; }
+  d.name = [d.firstName, d.father, d.lastName].filter(Boolean).join(" ");
+  d.nameEn = [d.firstEn, d.lastEn].filter(Boolean).join(" ");
+  if(d.status === "read") d.review = "";
+  try{ await db.doc("people/" + k).update(d); editPerson = ""; editing = false; render(true); }
+  catch(e){ m.className = "msg pmsg err"; m.textContent = "تعذّر الحفظ."; }
+}
+
+async function exportExcel(btn){
+  const m = $("#xl-msg"); m.className = "msg"; m.textContent = "جارٍ إنشاء الملف…"; btn.disabled = true;
+  try{
+    if(!mcp) throw {code:"no_mcp"};
+    const head = ["الرقم الشخصي","الاسم","النسبة","اسم الأب","اسم الأم","تاريخ الولادة","محل الولادة","الجنس","الأمانة","محل القيد","رقم البطاقة","Name (EN)","Surname (EN)","ملف الهوية","السيرة الذاتية","حالة البيانات","ملاحظات"];
+    const list = Object.values(people).sort((x,y) => (x.name||"").localeCompare(y.name||"", "ar"));
+    const aoa = [head].concat(list.map(v => [v.nid||"", v.firstName||"", v.lastName||"", v.father||"", v.mother||"",
+      v.dob ? v.dob.split("-").reverse().join("/") : "", v.birthPlace||"", v.gender==="m"?"ذكر":(v.gender==="f"?"أنثى":""), v.amana||"", v.qaid||"", v.cardNo||"",
+      v.firstEn||"", v.lastEn||"", v.idFileName||(v.idFileId?"الهوية":""), v.cvFileName||(v.cvFileId?"السيرة":""), v.status==="read"?"تمت القراءة":"بانتظار التحقق", v.review||v.notes||""]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    list.forEach((v, i) => {
+      const r = i + 2;
+      ws["A"+r] && (ws["A"+r].t = "s");
+      if(v.idFileId) ws["N"+r].l = {Target: `https://drive.google.com/file/d/${v.idFileId}/view`};
+      if(v.cvFileId) ws["O"+r].l = {Target: `https://drive.google.com/file/d/${v.cvFileId}/view`};
+    });
+    ws["!cols"] = [16,12,12,12,12,14,12,8,10,16,12,13,13,22,22,15,40].map(w => ({wch:w}));
+    ws["!autofilter"] = {ref: "A1:Q" + (list.length + 1)};
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "الهويات");
+    wb.Workbook = {Views: [{RTL: true}]};
+    const out = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+    const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const up = await upload(new File([out], "بيانات الهويات.xlsx", {type: XT}), FOLD.ids, "بيانات الهويات");
+    if(!up.id) throw {code:"tool_error", message:"لم يُرفع الملف."};
+    try{ await mcp.callTool("Google Drive", "update_file", {fileId: up.id, readOnly: true, readOnlyReason: "يُحدَّث من تطبيق تسجيل الكادر. عدّل البيانات من التطبيق."}); }catch(_){}
+    const old = excelCfg.fileId;
+    await db.doc("config/excel").set({fileId: up.id, updatedAt: today()});
+    if(old && old !== up.id){
+      try{ await mcp.callTool("Google Drive", "update_file", {fileId: old, readOnly: false}); }catch(_){}
+      await trash(old);
+    }
+    m.className = "msg ok"; m.textContent = "تم تحديث الملف.";
+  }catch(e){ m.className = "msg err"; m.textContent = e && e.code === "no_mcp" ? "الوصول إلى Google Drive غير متاح هنا." : (e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e)); }
+  btn.disabled = false;
+}
+
+
+/* ===== جداول الدوام ===== */
+const MON_EN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MON_AR=["كانون الثاني","شباط","آذار","نيسان","أيار","حزيران","تموز","آب","أيلول","تشرين الأول","تشرين الثاني","كانون الأول"];
+const DAY_AR=["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+const colL = n => { let s=""; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+
+function projMonths(p){
+  if(!p.start || !p.end) return [];
+  const [sy, sm] = p.start.split("-").map(Number);
+  const e = new Date(p.end + "T00:00:00Z"); e.setUTCDate(e.getUTCDate() - 1);
+  const out = []; let y = sy, m = sm;
+  while(y < e.getUTCFullYear() || (y === e.getUTCFullYear() && m <= e.getUTCMonth() + 1)){ out.push(`${y}-${String(m).padStart(2,"0")}`); m++; if(m > 12){ m = 1; y++; } }
+  return out;
+}
+const tsCfg = p => Object.assign({weekend:[5,6], hours:8}, p.timesheet || {});
+function staffOf(p){
+  return (p.positions || []).filter(x => x.title_m && x.duties).map(pos => {
+    const a = assignments[p.code + "__" + pid(pos)]; const v = a && people[a.personKey];
+    return v ? {pos, a, v, id: pid(pos)} : null;
+  }).filter(Boolean);
+}
+function dayGrid(name, y, m, weekend, selected, disabled){
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate(), first = new Date(Date.UTC(y, m-1, 1)).getUTCDay();
+  let h = `<div class="dgrid" data-grid="${esc(name)}">` + ["ح","ن","ث","ر","خ","ج","س"].map(d => `<span class="dh">${d}</span>`).join("");
+  for(let i = 0; i < first; i++) h += `<span></span>`;
+  for(let d = 1; d <= dim; d++){
+    const wd = (first + d - 1) % 7, wk = weekend.includes(wd), dis = wk || (disabled || []).includes(d);
+    h += `<button type="button" class="dday${selected.includes(d) ? " on" : ""}${wk ? " wkend" : ""}" data-day="${d}" ${dis ? "disabled" : ""} aria-pressed="${selected.includes(d)}" title="${DAY_AR[wd]} ${d}">${d}</button>`;
+  }
+  return h + `</div>`;
+}
+const gridDays = el => el ? [...el.querySelectorAll(".dday.on")].map(b => +b.dataset.day) : [];
+
+function parseDays(str, dim){ return [...new Set(String(str||"").split(/[,،\s]+/).map(Number).filter(n => n >= 1 && n <= dim))].sort((a,b)=>a-b); }
+
+function renderTimesheets(p){
+  const box = $("#tsBox"); if(!box) return;
+  const open = box.querySelector("details") && box.querySelector("details").open;
+  const months = projMonths(p);
+  if(!tsMonth || !months.includes(tsMonth)) tsMonth = months.find(m => m >= today().slice(0,7)) || months[months.length-1] || "";
+  const cfg = tsCfg(p), doc = timesheets[p.code + "__" + tsMonth] || {}, leave = doc.leave || {}, files = doc.files || {};
+  const [y, m] = tsMonth ? tsMonth.split("-").map(Number) : [0,0];
+  const hol = holidays.filter(d => d.startsWith(tsMonth)).map(d => +d.slice(8));
+  const rows = staffOf(p).map(({pos, v, id}) => `<tr data-tsid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
+     <td>${dayGrid("lv-" + id, y, m, cfg.weekend, leave[id] || [], hol)}</td>
+     <td>${files[id] ? dlink(files[id].pdf || files[id].xlsx, "PDF") + (files[id].xlsx ? " · " + dlink(files[id].xlsx, "Excel") : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("");
+  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>جداول الدوام الشهرية</summary>
+    <div class="sgrid">
+      <div><label>الشهر</label><select id="ts-month">${months.map(mm => `<option value="${mm}" ${mm===tsMonth?"selected":""}>${MON_AR[+mm.slice(5)-1]} ${mm.slice(0,4)}</option>`).join("")}</select></div>
+      <div><label>ساعات العمل اليومية</label><input id="ts-hours" type="number" min="1" max="12" value="${esc(cfg.hours)}"></div>
+      <div><label>أيام العطلة الأسبوعية</label><div class="wk">${DAY_AR.map((d,i) => `<label class="chk"><input type="checkbox" name="wk" value="${i}" ${cfg.weekend.includes(i)?"checked":""}>${d}</label>`).join("")}</div></div>
+    </div>
+    <div class="hol"><label>العطل الرسمية في هذا الشهر — اضغط على اليوم</label>${tsMonth ? dayGrid("hol", y, m, cfg.weekend, hol) : ""}</div>
+    <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>أيام الإجازة — اضغط على اليوم</th><th>الجدول</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="code">لا يوجد موظفون لهم عقود في هذا المشروع.</td></tr>'}</tbody></table></div>
+    <div class="row"><span id="ts-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="tsSave">حفظ الإجازات والعطل</button></span></div>
+  </details>`;
+}
+
+async function tsSaveInputs(){
+  const p = projects[current], key = p.code + "__" + tsMonth;
+  const [y, m] = tsMonth.split("-").map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const weekend = [...document.querySelectorAll('input[name="wk"]:checked')].map(i => +i.value);
+  const hours = Number($("#ts-hours").value) || 8;
+  const hol = gridDays(document.querySelector('[data-grid="hol"]')).map(d => `${tsMonth}-${String(d).padStart(2,"0")}`);
+  const newHol = holidays.filter(d => !d.startsWith(tsMonth)).concat(hol).sort();
+  const leave = {};
+  document.querySelectorAll("tr[data-tsid]").forEach(tr => { const l = gridDays(tr.querySelector(".dgrid")); if(l.length) leave[tr.dataset.tsid] = l; });
+  await db.doc("config/holidays").set({dates: newHol});
+  await db.doc("projects/" + p.code).update({timesheet: {weekend, hours}});
+  const prev = timesheets[key] || {};
+  await db.doc("timesheets/" + key).set({...prev, project: p.code, month: tsMonth, leave});
+  holidays = newHol;
+  return {weekend, hours, hol: hol.map(d => +d.slice(8)), leave, dim, y, m, prev};
+}
+
+async function loadTsTemplate(){
+  if(tsTpl && tsTpl.id === templates.timesheet) return tsTpl;
+  if(!templates.timesheet) throw {code:"tool_error", message:"لم يُحدد قالب جدول الدوام."};
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: templates.timesheet});
+  const b64 = findB64(r, 0).replace(/\s/g,"");
+  if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة قالب جدول الدوام."};
+  const zip = await JSZip.loadAsync(b64, {base64:true});
+  tsTpl = {id: templates.timesheet, b64, xml: await zip.file("xl/worksheets/sheet1.xml").async("string")};
+  return tsTpl;
+}
+
+function setCell(xml, ref, val){
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+  return xml.replace(re, (all, attrs) => {
+    const sm = attrs.match(/ s="(\d+)"/); const sAttr = sm ? ` s="${sm[1]}"` : "";
+    if(val === null || val === undefined || val === "") return `<c r="${ref}"${sAttr}/>`;
+    if(typeof val === "number") return `<c r="${ref}"${sAttr}><v>${val}</v></c>`;
+    return `<c r="${ref}"${sAttr} t="inlineStr"><is><t>${xmlEsc(val)}</t></is></c>`;
+  });
+}
+
+function fillTs(xml, d){
+  let x = xml;
+  const rep = {NAME: d.name, POSITION: d.position, MONTH_EN: MON_EN[d.m-1], MONTH_AR: MON_AR[d.m-1], YEAR: String(d.y), PROJECT: d.project, NOTES: d.notes};
+  for(const [k, v] of Object.entries(rep)) x = x.split("{{" + k + "}}").join(xmlEsc(v));
+  for(let day = 1; day <= 31; day++){
+    const c = colL(4 + day);
+    if(day > d.dim){ for(const r of [7,8,9,10,11]) x = setCell(x, c + r, null); continue; }
+    const serial = (Date.UTC(d.y, d.m-1, day) - Date.UTC(1899, 11, 30)) / 86400000;
+    const wd = new Date(Date.UTC(d.y, d.m-1, day)).getUTCDay();
+    x = setCell(x, c + "7", serial);
+    if(d.weekend.includes(wd)){ x = setCell(x, c+"8", 0); x = setCell(x, c+"9", null); x = setCell(x, c+"10", null); x = setCell(x, c+"11", null); continue; }
+    x = setCell(x, c+"8", d.hours);
+    const isH = d.hol.includes(day), isL = !isH && d.leave.includes(day);
+    x = setCell(x, c+"9", isH || isL ? 0 : d.hours);
+    x = setCell(x, c+"10", isH ? d.hours : null);
+    x = setCell(x, c+"11", isL ? d.hours : null);
+  }
+  return x;
+}
+
+async function tsMake(btn){
+  const say = (t, err) => { const m = $("#ts-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("جداول الدوام: " + t, true); };
+  const p = projects[current];
+  if(!mcp) return say("الوصول إلى Google Drive غير متاح في هذا العرض.", true);
+  const staff = staffOf(p); if(!staff.length) return say("لا يوجد موظفون لهم عقود.", true);
+  try{
+    say("جارٍ الحفظ…");
+    const inp = await tsSaveInputs();
+    const tpl = await loadTsTemplate();
+    const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    let folder = (p.monthFolders || {})[tsMonth];
+    if(!folder){
+      const fr = await mcp.callTool("Google Drive", "create_file", {title: tsMonth, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
+      folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
+      await db.doc("projects/" + p.code).update({monthFolders: {[tsMonth]: folder}});
+    }
+    const files = {...(inp.prev.files || {})};
+    let n = 0;
+    for(const {pos, v, id} of staff){
+      n++; say(`جارٍ إنشاء جدول ${v.name} (${n}/${staff.length})…`);
+      const lv = inp.leave[id] || [];
+      const notes = [inp.hol.length ? "عطل رسمية: " + inp.hol.join("، ") : "", lv.length ? "إجازات: " + lv.join("، ") : ""].filter(Boolean).join(" — ");
+      const xml = fillTs(tpl.xml, {name: v.name, position: gw(v.gender, pos.title_m, pos.title_f), project: (p.contract || {}).label || p.code,
+        notes, y: inp.y, m: inp.m, dim: inp.dim, weekend: inp.weekend, hours: inp.hours, hol: inp.hol, leave: lv});
+      const zip = await JSZip.loadAsync(tpl.b64, {base64:true});
+      zip.file("xl/worksheets/sheet1.xml", xml);
+      const blob = await zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
+      const base = `جدول دوام - ${tsMonth} - ${pos.code} - ${v.nameEn || v.name}`;
+      const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
+      const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+      const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
+      const gid = payloadId(gr);
+      let pdfId = "";
+      try{
+        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+        const pdf64 = findB64(ex, 0);
+        if(pdf64){ const pu = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
+      } finally { await trash(gid); }
+      const old = files[id];
+      files[id] = {xlsx: xu.id, pdf: pdfId, at: today()};
+      if(old){ await trash(old.xlsx); if(old.pdf) await trash(old.pdf); }
+    }
+    await db.doc("timesheets/" + p.code + "__" + tsMonth).update({files});
+    say("تم إنشاء الجداول."); return true;
+  }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
+}
+
+
+/* ===== الرواتب ===== */
+const ddmmyyyy = (y, m, d) => `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+
+function personByPos(p, posId){ const a = assignments[p.code + "__" + posId]; return a && people[a.personKey]; }
+
+function renderPayroll(p){
+  const box = $("#prBox"); if(!box) return;
+  const open = box.querySelector("details") && box.querySelector("details").open;
+  const months = projMonths(p);
+  if(!tsMonth) return;
+  const s = p.signatories || {}, doc = payrolls[p.code + "__" + tsMonth] || {}, ded = doc.deductions || {}, f = doc.files || {};
+  const finPos = s.financePositionCode || "";
+  const link = (o, l) => o ? dlink(o.pdf || o.xlsx, l) : "";
+  const rows = staffOf(p).map(({pos, v, id}) => { const d = ded[id] || {}; return `<tr data-prid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
+      <td class="code">${Number(pos.salary||0).toLocaleString("en-US")}</td>
+      <td><input name="adv" type="number" min="0" value="${esc(d.adv||"")}" aria-label="سلفة"></td>
+      <td><input name="loan" type="number" min="0" value="${esc(d.loan||"")}" aria-label="قرض"></td>
+      <td><input name="pnote" value="${esc(d.notes||"")}" aria-label="ملاحظات"></td>
+      <td>${link((f.vouchers||{})[id], "الإيصال") || '<span class="code">—</span>'}</td></tr>`; }).join("");
+  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>الرواتب الشهرية — ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
+    <p class="code">الشهر نفسه المختار في جداول الدوام. الإجازات في الإيصال تُؤخذ من جدول الدوام.</p>
+    <div class="sgrid">
+      <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+    </div>
+    <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>الراتب</th><th>سلفة</th><th>قرض</th><th>ملاحظات</th><th>الإيصال</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="code">لا يوجد موظفون لهم عقود.</td></tr>'}</tbody></table></div>
+    <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel") : "") : ""}</span>
+      <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button></span></div>
+  </details>`;
+}
+
+async function prSaveInputs(){
+  const p = projects[current], key = p.code + "__" + tsMonth;
+  const deductions = {};
+  document.querySelectorAll("tr[data-prid]").forEach(tr => {
+    const q = n => tr.querySelector(`[name="${n}"]`).value.trim();
+    const d = {adv: Number(q("adv")) || 0, loan: Number(q("loan")) || 0, notes: q("pnote")};
+    if(d.adv || d.loan || d.notes) deductions[tr.dataset.prid] = d;
+  });
+  await db.doc("projects/" + p.code).update({signatories: {...(p.signatories || {}), financePositionCode: $("#pr-fin").value}});
+  const prev = payrolls[key] || {};
+  await db.doc("payroll/" + key).set({...prev, project: p.code, month: tsMonth, deductions});
+  return {deductions, prev, finPos: $("#pr-fin").value};
+}
+
+async function loadX(id){
+  if(xTpl[id]) return xTpl[id];
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: id});
+  const b64 = findB64(r, 0).replace(/\s/g,"");
+  if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة القالب من الدرايف."};
+  const zip = await JSZip.loadAsync(b64, {base64:true});
+  return xTpl[id] = {b64, xml: await zip.file("xl/worksheets/sheet1.xml").async("string")};
+}
+
+async function buildX(tpl, xml){
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const zip = await JSZip.loadAsync(tpl.b64, {base64:true});
+  zip.file("xl/worksheets/sheet1.xml", xml);
+  return zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
+}
+
+async function saveXP(blob, folder, base){
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
+  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+  const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
+  const gid = payloadId(gr); let pdf = "";
+  try{
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+    const p64 = findB64(ex, 0);
+    if(p64){ const pu = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
+  } finally { if(gid) await trash(gid); }
+  return {xlsx: xu.id, pdf, at: today()};
+}
+async function trashSet(o){ if(o){ await trash(o.xlsx); if(o.pdf) await trash(o.pdf); } }
+
+function rep(x, map){ for(const [k, v] of Object.entries(map)) x = x.split("{{" + k + "}}").join(xmlEsc(v)); return x; }
+
+async function monthFolder(p){
+  let folder = (p.monthFolders || {})[tsMonth];
+  if(!folder){
+    const fr = await mcp.callTool("Google Drive", "create_file", {title: tsMonth, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
+    folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
+    await db.doc("projects/" + p.code).update({monthFolders: {[tsMonth]: folder}});
+  }
+  return folder;
+}
+
+async function prMake(btn){
+  const say = (t, err) => { const m = $("#pr-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("الرواتب: " + t, true); };
+  const p = projects[current], c = p.contract || {};
+  if(!mcp){ say("الوصول إلى Google Drive غير متاح في هذا العرض.", true); return false; }
+  const staff = staffOf(p); if(!staff.length){ say("لا يوجد موظفون لهم عقود.", true); return false; }
+  if(!c.currency){ say("حدد العملة في إعدادات العقود.", true); return false; }
+  try{
+    say("جارٍ الحفظ…");
+    const inp = await prSaveInputs();
+    const [y, m] = tsMonth.split("-").map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const date = ddmmyyyy(y, m, dim), cur = c.currency;
+    const pm = personByPos(p, (p.signatories || {}).pmPositionCode), fin = personByPos(p, inp.finPos);
+    const ts = timesheets[p.code + "__" + tsMonth] || {};
+    const folder = await monthFolder(p);
+    const files = {...(inp.prev.files || {})}; files.vouchers = {...(files.vouchers || {})};
+    // جدول الرواتب
+    say("جارٍ إنشاء جدول الرواتب…");
+    const pt = await loadX(templates.payroll);
+    let x = rep(pt.xml, {TITLE: `جدول الرواتب الشهرية فريق سوريانا الأمل عن شهر ${MON_AR[m-1]} ${y} Monthly Payroll Schedule for Soryana Al-Amal Team for ${MON_EN[m-1]} ${y}`,
+      SAL_HDR: `الراتب (${cur})`, DATE: date, FIN_NAME: fin ? fin.name : "", PM_NAME: pm ? pm.name : ""});
+    for(let r = 7; r <= 19; r++){
+      const it = staff[r - 7], d = it ? (inp.deductions[it.id] || {}) : {};
+      const vals = it ? {A: r - 6, B: it.pos.code, C: it.v.name, D: gw(it.v.gender, it.pos.title_m, it.pos.title_f), E: Number(it.pos.salary) || 0, F: d.adv || 0, G: d.loan || 0, I: d.notes || ""}
+                      : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, I: null};
+      for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
+    }
+    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${tsMonth}`);
+    await trashSet(files.payroll); files.payroll = pf;
+    // الإيصالات والفواتير
+    const vt = await loadX(templates.voucher);
+    let n = 0;
+    for(const {pos, v, id} of staff){
+      n++; say(`جارٍ إنشاء إيصال ${v.name} (${n}/${staff.length})…`);
+      const d = inp.deductions[id] || {}, sal = Number(pos.salary) || 0, net = sal - (d.adv || 0) - (d.loan || 0);
+      const title = gw(v.gender, pos.title_m, pos.title_f), lv = ((ts.leave || {})[id] || []).length;
+      let vx = rep(vt.xml, {DATE: date, NO: `${tsMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
+        ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
+      vx = setCell(setCell(vx, "F14", sal), "F24", net);
+      const base = `${pos.code} - ${v.nameEn || v.name}`;
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`);
+      await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
+    }
+    await db.doc("payroll/" + p.code + "__" + tsMonth).update({files});
+    say("تم إنشاء الرواتب."); return true;
+  }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
+}
+
+
+/* ===== تجميع التوثيقات ===== */
+const DOC_ROOT = "توثيقات المشروع", DOC_PAT = "توثيق - {الشهر} - {البند} - {الاسم_EN}";
+const docCfg = p => Object.assign({mode: "monthly", pattern: DOC_PAT}, p.docs || {});
+const docName = (pat, o) => (pat || DOC_PAT).replace(/\{الشهر\}/g, o.month).replace(/\{البند\}/g, o.code).replace(/\{الاسم_EN\}/g, o.en).replace(/\{الاسم\}/g, o.ar).replace(/\{المشروع\}/g, o.project).replace(/[\\/:*?"<>|]/g, " ").trim();
+
+/* مجلد الحفظ على الكمبيوتر */
+let dirHandle = null;
+function idb(){ return new Promise((res, rej) => { try{ const r = indexedDB.open("kadr", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }catch(e){ rej(e); } }); }
+async function kvGet(k){ try{ const d = await idb(); return await new Promise(res => { const q = d.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); }catch(e){ return null; } }
+async function kvSet(k, v){ try{ const d = await idb(); await new Promise(res => { const t = d.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = res; }); }catch(e){} }
+const canPickDir = () => typeof window.showDirectoryPicker === "function";
+async function loadDir(){ if(!canPickDir()) return; dirHandle = await kvGet("dir"); renderDocs(projects[current]); }
+async function dirPerm(ask){
+  if(!dirHandle) return false;
+  try{ const o = {mode: "readwrite"}; if(await dirHandle.queryPermission(o) === "granted") return true; return ask ? (await dirHandle.requestPermission(o)) === "granted" : false; }catch(e){ return false; }
+}
+async function pickDir(){
+  const m = $("#doc-msg");
+  try{ dirHandle = await window.showDirectoryPicker({mode: "readwrite", id: "kadr-docs"}); await kvSet("dir", dirHandle); m.className = "msg ok"; m.textContent = "تم تحديد المجلد: " + dirHandle.name; renderDocs(projects[current]); }
+  catch(e){ if(e && e.name === "AbortError") return; m.className = "msg err"; m.textContent = "اختيار المجلد ممنوع في هذا العرض. افتح الصفحة في تبويب مستقل في Chrome أو Edge وجرّب مرة أخرى."; }
+}
+async function writeToDir(sub, name, blob){
+  let d = dirHandle;
+  if(sub) d = await d.getDirectoryHandle(sub, {create: true});
+  const fh = await d.getFileHandle(name.replace(/[\\/:*?"<>|]/g, " "), {create: true});
+  const w = await fh.createWritable(); await w.write(blob); await w.close();
+}
+
+let docState = {}; const mergedBlobs = {}; let dlNs;
+async function saveMerged(ids, say){
+  if(dirHandle && await dirPerm(true)){
+    let ok = 0;
+    for(const id of ids){ const m = mergedBlobs[id]; if(!m) continue; say(`جارٍ حفظ ملف ${m.label} في ${dirHandle.name}…`);
+      try{ await writeToDir(tsMonth, m.name, m.blob); ok++; }catch(e){ say("تعذّر الحفظ في المجلد: " + (e && e.message || e), true); break; } }
+    if(ok){ say(`تم حفظ ${ok} ملف في ${dirHandle.name} ← ${tsMonth}.`); return; }
+  }
+  dlNs = dlNs || await claude.use("downloads");
+  if(!dlNs){ say("التنزيل غير متاح في هذا العرض.", true); return; }
+  let ok = 0;
+  for(const id of ids){
+    const m = mergedBlobs[id]; if(!m) continue;
+    say(`تأكيد حفظ ملف ${m.label}…`);
+    try{ await dlNs.save({filename: m.name, data: m.blob}); ok++; }
+    catch(e){ if(e && e.code === "declined") continue; if(e && e.code === "rate_limited"){ await new Promise(r => setTimeout(r, 1500)); try{ await dlNs.save({filename: m.name, data: m.blob}); ok++; }catch(_){} continue; }
+      say("تعذّر التنزيل" + errDetail(e), true); return; }
+  }
+  say(`تم حفظ ${ok} ملف على الكمبيوتر.`);
+}
+
+function renderDocs(p){
+  const box = $("#docBox"); if(!box || !tsMonth) return;
+  const c = docCfg(p), st = docState[p.code + "__" + tsMonth] || {};
+  box.innerHTML = `<div class="settings" style="display:grid;gap:10px">
+    <strong>تجميع توثيقات ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</strong>
+    <div class="sgrid">
+      <div><label>طريقة التجميع</label><select id="doc-mode">
+        <option value="monthly" ${c.mode!=="separate"?"selected":""}>ملف PDF مدمج لكل موظف — يُحفظ على الكمبيوتر</option>
+        <option value="separate" ${c.mode==="separate"?"selected":""}>كل ملف PDF لوحده — مجلد لكل موظف على الدرايف</option>
+      </select></div>
+      <div style="grid-column:span 2"><label>تسمية التوثيق (الملف المدمج، أو مجلد الملفات المنفصلة)</label><input id="doc-pat" value="${esc(c.pattern)}"></div>
+    </div>
+    <p class="code">المتغيرات المتاحة في التسمية: {الشهر} {البند} {الاسم} {الاسم_EN} {المشروع}. مثال الناتج: ${esc(docName(c.pattern, {month: tsMonth, code: "1.2", en: "Samer Khalil", ar: "سامر وليد خليل", project: p.code}))}</p>
+    <p class="code">${c.mode === "separate" ? "الحفظ في الدرايف: مجلد المشروع ← " + DOC_ROOT + " ← الشهر." : "الملفات المدمجة تُنزَّل على جهازك، ويُطلب منك تأكيد حفظ كل ملف."} ترتيب الملفات: إيصال الراتب، جدول الرواتب، جدول الدوام، العقد، الهوية، السيرة الذاتية، ثم المستندات الأخرى.</p>
+    ${c.mode !== "separate" ? `<div class="row"><span class="current">${dirHandle ? "مجلد الحفظ: <strong>" + esc(dirHandle.name) + "</strong> (تُنشأ داخله مجلدات الأشهر)" : (canPickDir() ? "لم يُحدد مجلد — تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح — تُستخدم التنزيلات العادية.")}</span>${canPickDir() ? `<button type="button" class="ghost" id="pickDir">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>` : ""}
+    ${st.links ? `<div class="current">${st.links}</div>` : ""}
+    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="docSave">حفظ</button> <button type="button" id="monthAll">إنشاء توثيقات الشهر</button></span></div>
+  </div>`;
+}
+
+
+/* ضغط الملفات الممسوحة ضوئياً */
+const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function canvasJpeg(canvas, q){ return new Promise(res => canvas.toBlob(b => b.arrayBuffer().then(a => res(new Uint8Array(a))), "image/jpeg", q)); }
+async function shrinkPdf(bytes){
+  if(!window.pdfjsLib || bytes.length < 180 * 1024) return bytes;
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    const doc = await pdfjsLib.getDocument({data: bytes.slice(0)}).promise;
+    const out = await PDFLib.PDFDocument.create();
+    for(let i = 1; i <= doc.numPages; i++){
+      const page = await doc.getPage(i), vp1 = page.getViewport({scale: 1});
+      const scale = Math.min(2, 1240 / vp1.width), vp = page.getViewport({scale});
+      const cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+      const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+      await page.render({canvasContext: ctx, viewport: vp}).promise;
+      const img = await out.embedJpg(await canvasJpeg(cv, 0.6));
+      out.addPage([vp1.width, vp1.height]).drawImage(img, {x: 0, y: 0, width: vp1.width, height: vp1.height});
+    }
+    const r = await out.save();
+    return r.length < bytes.length ? r : bytes;
+  }catch(e){ return bytes; }
+}
+async function shrinkImage(u, type){
+  try{
+    const bmp = await createImageBitmap(new Blob([u], {type}));
+    const sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+    const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+    return {bytes: await canvasJpeg(cv, 0.7), jpg: true};
+  }catch(e){ return {bytes: u, jpg: type === "image/jpeg"}; }
+}
+
+async function fetchBytes(fileId){
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId});
+  const b64 = findB64(r, 0).replace(/\s/g,"");
+  if(!b64) throw {code:"tool_error", message:"تعذّر تحميل ملف من الدرايف."};
+  const bin = atob(b64); const u = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u;
+}
+async function toPdfBytes(fileId, folder){
+  const u = await fetchBytes(fileId);
+  const kind = u[0]===0x25&&u[1]===0x50 ? "pdf" : u[0]===0xFF&&u[1]===0xD8 ? "jpg" : u[0]===0x89&&u[1]===0x50 ? "png" : u[0]===0x50&&u[1]===0x4B ? "office" : "other";
+  if(kind === "pdf") return u;
+  if(kind === "jpg" || kind === "png"){
+    const sm = await shrinkImage(u, kind === "jpg" ? "image/jpeg" : "image/png");
+    const d = await PDFLib.PDFDocument.create(); const img = sm.jpg ? await d.embedJpg(sm.bytes) : await d.embedPng(sm.bytes);
+    const W = 595, H = 842, sc = Math.min((W-60)/img.width, (H-60)/img.height, 1);
+    const pg = d.addPage([W, H]); pg.drawImage(img, {x:(W-img.width*sc)/2, y:(H-img.height*sc)/2, width:img.width*sc, height:img.height*sc});
+    return d.save();
+  }
+  if(kind === "office"){
+    let b64 = ""; for(let i=0;i<u.length;i+=0x8000) b64 += String.fromCharCode.apply(null, u.subarray(i, i+0x8000)); b64 = btoa(b64);
+    const gr = await mcp.callTool("Google Drive", "create_file", {title: "تحويل مؤقت", parentId: folder, contentMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", base64Content: b64});
+    const gid = payloadId(gr);
+    try{ return await fetchExport(gid); } finally { await trash(gid); }
+  }
+  return null;
+}
+async function fetchExport(gid){
+  const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+  const b64 = findB64(ex, 0).replace(/\s/g,""); const bin = atob(b64); const u = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u;
+}
+
+async function ensureFolder(title, parent, cacheKey, p){
+  const cache = (p.docFolders || {});
+  if(cache[cacheKey]) return cache[cacheKey];
+  const fr = await mcp.callTool("Google Drive", "create_file", {title, parentId: parent, contentMimeType: "application/vnd.google-apps.folder"});
+  const id = payloadId(fr); if(!id) throw {code:"tool_error", message:"لم يُنشأ مجلد التوثيقات."};
+  await db.doc("projects/" + p.code).update({docFolders: {[cacheKey]: id}});
+  p.docFolders = {...cache, [cacheKey]: id};
+  return id;
+}
+
+async function buildDocs(say){
+  const p = projects[current], c = {mode: $("#doc-mode").value, pattern: $("#doc-pat").value.trim() || DOC_PAT};
+  await db.doc("projects/" + p.code).update({docs: c});
+  const pr = (await db.doc("payroll/" + p.code + "__" + tsMonth).get()).data() || {};
+  const ts = (await db.doc("timesheets/" + p.code + "__" + tsMonth).get()).data() || {};
+  const pf = pr.files || {}, tf = ts.files || {};
+  let target = null;
+  if(c.mode === "separate"){ const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p); target = await ensureFolder(tsMonth, root, "m:" + tsMonth, p); }
+  else { for(const k in mergedBlobs) delete mergedBlobs[k]; }
+  const out = [];
+  let n = 0;
+  for(const {pos, v, id, a} of staffOf(p)){
+    n++;
+    const contract = contractDoc(a);
+    const others = (v.docs || []).concat((a.docs || []).filter(d => d.type !== "عقد العمل"));
+    const parts = [
+      ["إيصال الراتب", ((pf.vouchers || {})[id] || {}).pdf], ["جدول الرواتب", (pf.payroll || {}).pdf], ["جدول الدوام", (tf[id] || {}).pdf],
+      ["العقد", contract && contract.fileId], ["الهوية", v.idFileId], ["السيرة الذاتية", v.cvFileId]
+    ].concat(others.map(d => [d.type, d.fileId])).filter(x => x[1]);
+    const label = `${pos.code} - ${v.nameEn || v.name}`;
+    const docTitle = docName(c.pattern, {month: tsMonth, code: pos.code, en: v.nameEn || v.name, ar: v.name, project: p.code});
+    if(c.mode === "separate"){
+      const sub = await ensureFolder(docTitle, target, "s:" + tsMonth + ":" + id + ":" + docTitle, p);
+      let k = 0;
+      for(const [t, fid] of parts){
+        k++; say(`جارٍ نسخ ملفات ${v.name} (${k}/${parts.length})…`);
+        await mcp.callTool("Google Drive", "copy_file", {fileId: fid, parentId: sub, title: `${String(k).padStart(2,"0")} - ${t} - ${label}`});
+      }
+      out.push(dlinkFolder(sub, v.name));
+      continue;
+    }
+    const merged = await PDFLib.PDFDocument.create(); const skipped = [];
+    let k = 0;
+    for(const [t, fid] of parts){
+      k++; say(`جارٍ دمج ملفات ${v.name} (${n}/${staffOf(p).length}) — ${t}…`);
+      try{
+        const bytes = await toPdfBytes(fid, target || (p.folders || {}).project);
+        if(!bytes){ skipped.push(t); continue; }
+        const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true});
+        (await merged.copyPages(src, src.getPageIndices())).forEach(pg => merged.addPage(pg));
+      }catch(e){ skipped.push(t); }
+    }
+    const blob = new Blob([await merged.save()], {type: "application/pdf"});
+    mergedBlobs[id] = {blob, name: docTitle + ".pdf", label: v.name, skipped};
+    out.push(`<button type="button" class="ghost" data-dl="${esc(id)}">تنزيل ${esc(v.name)}</button>` + (skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""));
+  }
+  docState[p.code + "__" + tsMonth] = {links: (c.mode === "separate" ? "المجلدات: " : "") + out.join(" ") + (c.mode !== "separate" && out.length > 1 ? ` <button type="button" data-dlall>تنزيل الكل</button>` : "")};
+  if(c.mode !== "separate"){ renderDocs(p); await saveMerged(Object.keys(mergedBlobs), say); }
+}
+const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/folders/${esc(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+
+async function monthAll(btn){
+  if(dirHandle && (projects[current].docs || {}).mode !== "separate") await dirPerm(true);
+  const say = (t, err) => { const m = $("#doc-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("التوثيقات: " + t, true); };
+  btn.disabled = true; editing = true;
+  try{
+    say("1/3 جداول الدوام…");
+    if(!await tsMake(btn)) throw {code:"tool_error", message:"توقف العمل عند جداول الدوام."};
+    say("2/3 الرواتب والإيصالات…");
+    if(!await prMake(btn)) throw {code:"tool_error", message:"توقف العمل عند الرواتب."};
+    say("3/3 تجميع التوثيقات…");
+    await buildDocs(say);
+    say("تم إنشاء توثيقات الشهر.");
+  }catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
+  btn.disabled = false; editing = false; setTimeout(() => render(true), 800);
+}
+
+/* ===== الإعدادات ===== */
+function renderSettings(p){
+  const box = $("#settings"); if(!p){ box.innerHTML = ""; return; }
+  const c = p.contract || {}, s = p.signatories || {}, pm = s.pmHiredBy || {};
+  const sets = Object.keys(duties);
+  const setOpts = sel => `<option value="">— بلا عقد —</option>` + sets.map(k => `<option ${k===sel?"selected":""}>${esc(k)}</option>`).join("");
+  const rows = (p.positions || []).map(pos => `<tr data-pid="${esc(pid(pos))}">
+      <td class="code">${esc(pos.code)}</td><td>${esc(pos.title)}</td>
+      <td><input name="tm" value="${esc(pos.title_m||"")}" aria-label="المسمى للمذكر"></td>
+      <td><input name="tf" value="${esc(pos.title_f||"")}" aria-label="المسمى للمؤنث"></td>
+      <td><input name="sal" type="number" min="0" value="${esc(pos.salary||"")}" aria-label="الراتب"></td>
+      <td><select name="dt" aria-label="مهام المنصب">${setOpts(pos.duties)}</select></td></tr>`).join("");
+  const dutyEd = sets.map(k => `<div class="dset"><label>${esc(k)}</label><textarea data-set="${esc(k)}" rows="5">${esc((duties[k]||[]).join("\n"))}</textarea></div>`).join("");
+  box.innerHTML = `<details class="settings"><summary>إعدادات العقود لمشروع ${esc(p.code)}</summary>
+    <div class="sgrid">
+      <div><label>اسم المشروع في العقد</label><input id="c-label" value="${esc(c.label||"")}" placeholder="اتركه فارغاً إن لم يوجد"></div>
+      <div><label>العملة</label><input id="c-cur" value="${esc(c.currency||"")}"></div>
+      <div><label>عدد الأشهر</label><input id="c-months" type="number" min="1" max="36" value="${esc(c.months||"")}"></div>
+      <div><label>من تاريخ</label><input id="c-start" value="${esc(c.start||"")}" placeholder="1-5-2026"></div>
+      <div><label>حتى تاريخ</label><input id="c-end" value="${esc(c.end||"")}" placeholder="1-11-2026"></div>
+      <div><label>تاريخ تحرير العقد</label><input id="c-date" value="${esc(c.date||"")}"></div>
+      <div><label>يوقّع عقد مدير المشروع</label><input id="s-name" value="${esc(pm.name||"")}"></div>
+      <div><label>صفته</label><input id="s-cap" value="${esc(pm.capacity||"")}"></div>
+      <div><label>الجنس</label><select id="s-g"><option value="f" ${pm.gender==="f"?"selected":""}>أنثى</option><option value="m" ${pm.gender==="m"?"selected":""}>ذكر</option></select></div>
+      <div><label>بند مدير المشروع</label><select id="s-pm">${(p.positions||[]).map(x => `<option value="${esc(pid(x))}" ${pid(x)===s.pmPositionCode?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+    </div>
+    <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>في الموازنة</th><th>المسمى (مذكر)</th><th>المسمى (مؤنث)</th><th>الراتب الشهري</th><th>المهام</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="row"><span id="set-msg" class="msg"></span><button type="button" id="saveSettings">حفظ الإعدادات</button></div>
+    <details class="duties"><summary>مهام الوظائف (لكل المشاريع)</summary>
+      <p class="code">مهمة في كل سطر. تُستخدم في كل العقود التي تختار هذه المهام.</p>
+      ${dutyEd}
+      <div class="dset"><label>إضافة مجموعة مهام جديدة</label><input id="newset" placeholder="اسم المنصب"></div>
+      <div class="row"><span id="duty-msg" class="msg"></span><button type="button" id="saveDuties">حفظ المهام</button></div>
+    </details>
+  </details>`;
+}
+
+async function saveSettings(){
+  const p = projects[current], m = $("#set-msg");
+  const positions = (p.positions || []).map(pos => {
+    const tr = document.querySelector(`tr[data-pid="${CSS.escape(pid(pos))}"]`); if(!tr) return pos;
+    const q = n => tr.querySelector(`[name="${n}"]`).value.trim();
+    const o = {...pos, title_m: q("tm"), title_f: q("tf"), duties: q("dt")};
+    const sal = q("sal"); o.salary = sal ? Number(sal) : "";
+    return o;
+  });
+  const contract = {label: $("#c-label").value.trim(), currency: $("#c-cur").value.trim(), months: Number($("#c-months").value) || "",
+    start: $("#c-start").value.trim(), end: $("#c-end").value.trim(), date: $("#c-date").value.trim()};
+  const signatories = {...(p.signatories || {}), pmPositionCode: $("#s-pm").value, othersHiredBy: "pm",
+    pmHiredBy: {name: $("#s-name").value.trim(), capacity: $("#s-cap").value.trim(), gender: $("#s-g").value}};
+  try{ await db.doc("projects/" + p.code).update({positions, contract, signatories}); editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }
+  catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
+}
+
+async function saveDuties(){
+  const m = $("#duty-msg"); const sets = {};
+  document.querySelectorAll("textarea[data-set]").forEach(t => { const l = t.value.split("\n").map(x => x.trim()).filter(Boolean); if(l.length) sets[t.dataset.set] = l; });
+  const nw = $("#newset").value.trim(); if(nw && !sets[nw]) sets[nw] = ["مهمة أولى — عدّلها"];
+  try{ await db.doc("config/duties").set({sets}); m.className = "msg ok"; m.textContent = "تم الحفظ."; }
+  catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
+}
+
+$("#project").addEventListener("change", e => { current = e.target.value; render(true); });
+document.getElementById("saveAll").addEventListener("click", saveAll);
+document.addEventListener("change", e => {
+  if(e.target.id === "ts-month"){ tsMonth = e.target.value; editing = false; render(true); return; }
+  if(e.target.name === "wk"){
+    const wk = [...document.querySelectorAll('input[name="wk"]:checked')].map(i => +i.value);
+    document.querySelectorAll("#tsBox .dday").forEach(b => { const wd = DAY_AR.indexOf((b.title || "").split(" ")[0]); const isW = wk.includes(wd);
+      b.classList.toggle("wkend", isW); if(isW){ b.classList.remove("on"); b.disabled = true; } else if(!b.closest("tr") || !document.querySelector('[data-grid="hol"] .dday.on[data-day="' + b.dataset.day + '"]')) b.disabled = false; });
+  }
+  if(e.target.closest("#tsBox") || e.target.closest("#prBox")) editing = true;
+  if(e.target.closest(".card")) editing = true;
+  if(e.target.name === "person") syncCard(e.target.closest(".card"));
+});
+document.addEventListener("input", e => {
+  if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#docBox")) editing = true;
+  if(e.target.name === "lcode"){ const b = e.target.closest(".addline").querySelector("[data-addline]"); delete b.dataset.ok; b.textContent = "إضافة البند"; }
+});
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if(!t) return;
+  if(t.classList.contains("dday")){ t.classList.toggle("on"); t.setAttribute("aria-pressed", t.classList.contains("on")); editing = true;
+    if(t.closest('[data-grid="hol"]')){ const d = t.dataset.day, on = t.classList.contains("on");
+      document.querySelectorAll('tr[data-tsid] .dday[data-day="' + d + '"]').forEach(b => { if(on){ b.classList.remove("on"); b.disabled = true; } else if(!b.classList.contains("wkend")) b.disabled = false; }); }
+    return; }
+  if(t.dataset.addrow !== undefined){ t.previousElementSibling.insertAdjacentHTML("beforeend", xrow()); editing = true; }
+  else if(t.dataset.addline !== undefined) addLine(t);
+  else if(t.dataset.contract !== undefined) makeContract(t);
+  else if(t.id === "saveSettings") saveSettings();
+  else if(t.id === "exportXl") exportExcel(t);
+  else if(t.id === "monthAll") monthAll(t);
+  else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
+  else if(t.id === "pickDir") pickDir();
+  else if(t.dataset.dl){ const m = $("#doc-msg"); saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
+  else if(t.dataset.dlall !== undefined){ const m = $("#doc-msg"); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
+  else if(t.id === "docSave"){ const p = projects[current], m = $("#doc-msg");
+    db.doc("projects/" + p.code).update({docs: {mode: $("#doc-mode").value, pattern: $("#doc-pat").value.trim() || DOC_PAT}})
+      .then(() => { editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }).catch(() => { m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }); }
+  else if(t.dataset.tab){ document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === t)); ["fixed","monthly"].forEach(k => $("#tab-" + k).hidden = k !== t.dataset.tab); }
+  else if(t.id === "prSave"){ prSaveInputs().then(() => { editing = false; const m=$("#pr-msg"); m.className="msg ok"; m.textContent="تم الحفظ."; }).catch(() => { const m=$("#pr-msg"); m.className="msg err"; m.textContent="تعذّر الحفظ."; }); }
+  else if(t.id === "tsSave"){ tsSaveInputs().then(() => { editing = false; const m=$("#ts-msg"); m.className="msg ok"; m.textContent="تم الحفظ."; }).catch(() => { const m=$("#ts-msg"); m.className="msg err"; m.textContent="تعذّر الحفظ."; }); }
+  else if(t.dataset.editp){ editPerson = t.dataset.editp; render(true); }
+  else if(t.dataset.cancelp !== undefined){ editPerson = ""; render(true); }
+  else if(t.dataset.savep !== undefined) savePerson(t);
+  else if(t.id === "saveDuties") saveDuties();
+  else if(t.dataset.rmline) removeLine(t);
+  else if(t.dataset.del) deleteDoc(t);
+  else if(t.dataset.unassign) unassign(t);
+});
+
+(async () => {
+  db = await claude.use("db");
+  if(!db){
+    $("#content").innerHTML = '<p class="empty">تعذّر الاتصال بالبيانات.</p>';
+    $("#project").innerHTML = '<option value="">غير متاح</option>';
+    return;
+  }
+  const timer = setTimeout(() => notice("تعذّر الوصول إلى البيانات حتى الآن. تحقق من الاتصال.", true), 10000);
+  db.collection("projects").onSnapshot(s => {
+    projects = {}; s.docs.forEach(d => { projects[d.id] = d.data(); });
+    if(!s.metadata.fromCache){ clearTimeout(timer); notice(""); }
+    render();
+  }, () => { clearTimeout(timer); notice("تعذّر تحميل المشاريع.", true); });
+  db.collection("assignments").onSnapshot(s => {
+    assignments = {}; s.docs.forEach(d => { assignments[d.id] = d.data(); });
+    render();
+  }, () => notice("تعذّر تحميل بيانات الكادر.", true));
+  db.doc("config/duties").onSnapshot(d => { duties = (d.exists && d.data().sets) || {}; render(); }, () => {});
+  db.doc("config/holidays").onSnapshot(d => { holidays = (d.exists && d.data().dates) || []; render(); }, () => {});
+  db.collection("payroll").onSnapshot(q => { payrolls = {}; q.docs.forEach(d => { payrolls[d.id] = d.data(); }); render(); }, () => {});
+  db.collection("timesheets").onSnapshot(q => { timesheets = {}; q.docs.forEach(d => { timesheets[d.id] = d.data(); }); render(); }, () => {});
+  db.doc("config/excel").onSnapshot(d => { excelCfg = (d.exists && d.data()) || {}; renderPeople(); }, () => {});
+  db.doc("config/templates").onSnapshot(d => { templates = (d.exists && d.data()) || {}; }, () => {});
+  db.collection("people").onSnapshot(s => {
+    people = {}; s.docs.forEach(d => { people[d.id] = d.data(); });
+    render();
+  }, () => notice("تعذّر تحميل قائمة الأشخاص.", true));
+  loadDir();
+  mcp = await claude.use("mcp");
+  if(mcp){
+    try{ const t = await mcp.listTools(); fileArgs = !!t.fileArgs; }catch(_){}
+  } else {
+    
+  }
+})();
+</script>
+</body>
+</html>
