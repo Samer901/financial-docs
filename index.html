@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794756244";</script>
-<script src="config.js?v=1794756244"></script>
+<script>window.APP_VERSION = "1794758778";</script>
+<script src="config.js?v=1794758778"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794756244"></script>
+<script src="platform.js?v=1794758778"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1158,7 +1158,7 @@ function renderTimesheets(p){
     </div>
     <div class="hol"><label>العطل الرسمية في هذا الشهر — اضغط على اليوم</label>${tsMonth ? dayGrid("hol", y, m, cfg.weekend, hol) : ""}</div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>أيام الإجازة — اضغط على اليوم</th><th>الجدول</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="code">لا يوجد موظفون لهم عقود في هذا المشروع.</td></tr>'}</tbody></table></div>
-    <div class="row"><span id="ts-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="tsSave">حفظ الإجازات والعطل</button> <button type="button" id="tsMakeBtn">إنشاء جداول الدوام</button></span></div>
+    <div class="row"><span id="ts-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="tsSave">حفظ الإجازات والعطل</button> <button type="button" id="tsMakeBtn">إنشاء جداول الدوام</button> <button type="button" class="x" data-delmonth="ts">حذف جداول الشهر</button></span></div>
   </details>`;
 }
 
@@ -1318,7 +1318,7 @@ function renderPayroll(p){
     </div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>الراتب</th><th>سلفة</th><th>قرض</th><th>ملاحظات</th><th>الإيصال</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="code">لا يوجد موظفون لهم عقود.</td></tr>'}</tbody></table></div>
     <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel") : "") : ""}</span>
-      <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button> <button type="button" id="prMakeBtn">إنشاء الرواتب والإيصالات</button></span></div>
+      <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button> <button type="button" id="prMakeBtn">إنشاء الرواتب والإيصالات</button> <button type="button" class="x" data-delmonth="pr">حذف رواتب الشهر</button></span></div>
   </details>`;
 }
 
@@ -1365,6 +1365,38 @@ async function saveXP(blob, folder, base, portrait, range, scale){
   } finally { if(gid) await trash(gid); }
   return {xlsx: xu.id, pdf, at: today()};
 }
+/* حذف ملفات شهر (الرواتب أو الدوام) ومستنداتها المدموجة، إلى سلة الدرايف */
+async function deleteMonth(btn){
+  const kind = btn.dataset.delmonth, p = projects[current], m = kind === "pr" ? prMonth : tsMonth, msg = $(kind === "pr" ? "#pr-msg" : "#ts-msg");
+  if(!mcp){ msg.className = "msg err"; msg.textContent = "الوصول إلى Google Drive غير متاح."; return; }
+  if(!confirmClick(btn, "اضغط مرة أخرى: ستُنقل الملفات إلى سلة الدرايف")) return;
+  btn.disabled = true; msg.className = "msg"; msg.textContent = "جارٍ الحذف…";
+  try{
+    const key = p.code + "__" + m;
+    if(kind === "pr"){
+      const d = payrolls[key] || {}, f = d.files || {};
+      for(const o of Object.values(f.vouchers || {})) await trashSet(o).catch(() => {});
+      if(f.payroll) await trashSet(f.payroll).catch(() => {});
+      await db.doc("payroll/" + key).set({...d, files: {}});
+      const df = {...(p.docFiles || {})};
+      for(const k of Object.keys(df)) if(k.startsWith(`pay:${m}:`)){ await trash(df[k].id).catch(() => {}); delete df[k]; }
+      await db.doc("projects/" + p.code).set({...p, docFiles: df});
+    } else {
+      const d = timesheets[key] || {};
+      for(const o of Object.values(d.files || {})) await trashSet(o).catch(() => {});
+      await db.doc("timesheets/" + key).set({...d, files: {}});
+    }
+    editing = false; render(true);
+    const mm = $(kind === "pr" ? "#pr-msg" : "#ts-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحذف."; }
+  }catch(e){ btn.disabled = false; msg.className = "msg err"; msg.textContent = mcpMessage(e); }
+}
+async function deleteDocFile(btn){
+  const p = projects[current], k = btn.dataset.deldoc;
+  if(!confirmClick(btn, "اضغط مرة أخرى")) return;
+  const df = {...(p.docFiles || {})}; if(df[k]){ if(mcp) await trash(df[k].id).catch(() => {}); delete df[k]; }
+  await db.doc("projects/" + p.code).set({...p, docFiles: df}); editing = false; render(true);
+}
+
 async function trashSet(o){ if(o){ await trash(o.xlsx); if(o.pdf) await trash(o.pdf); } }
 
 function rep(x, map){ for(const [k, v] of Object.entries(map)) x = x.split("{{" + k + "}}").join(xmlEsc(v)); return x; }
@@ -1583,7 +1615,7 @@ function renderDocs(p, kind){
     <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}">دمج المستندات</button></div>
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
-      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
     ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم. أعد الترقيم من تبويب «التقارير المالية» قبل الدمج.</p>` : ""}
     <div class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر، تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح، تُستخدم التنزيلات العادية.")} ${canPickDir() ? `<button type="button" class="ghost" data-pickdir="${kind}">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
@@ -2717,6 +2749,8 @@ document.addEventListener("click", e => {
   else if(t.dataset.newp !== undefined) addPerson(t);
   else if(t.id === "saveDuties" || t.dataset.addset) saveDuties();
   else if(t.dataset.delset) deleteDutySet(t);
+  else if(t.dataset.delmonth) deleteMonth(t);
+  else if(t.dataset.deldoc) deleteDocFile(t);
   else if(t.dataset.rmline) removeLine(t);
   else if(t.dataset.del) deleteDoc(t);
   else if(t.dataset.unassign) unassign(t);
