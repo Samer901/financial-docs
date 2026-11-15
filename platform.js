@@ -14,7 +14,10 @@
   };
 
   /* ---------- المصادقة ---------- */
-  let token = null, tokenExp = 0, tokenClient = null, pendingAuth = null;
+  const AUTH_KEY = "kadr-auth";
+  let token = null, tokenExp = 0, tokenClient = null, pendingAuth = null, email = "";
+  try { const a = JSON.parse(localStorage.getItem(AUTH_KEY) || "{}"); email = a.email || ""; if (a.token && a.exp > Date.now()) { token = a.token; tokenExp = a.exp; } } catch (e) {}
+  function saveAuth() { try { localStorage.setItem(AUTH_KEY, JSON.stringify({ token, exp: tokenExp, email })); } catch (e) {} }
   function initClient() {
     if (tokenClient) return tokenClient;
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -22,7 +25,7 @@
       scope: "https://www.googleapis.com/auth/drive",
       callback: (r) => {
         const p = pendingAuth; pendingAuth = null;
-        if (r && r.access_token) { token = r.access_token; tokenExp = Date.now() + (Number(r.expires_in) || 3500) * 1000 - 60000; p && p.res(token); }
+        if (r && r.access_token) { token = r.access_token; tokenExp = Date.now() + (Number(r.expires_in) || 3500) * 1000 - 60000; saveAuth(); p && p.res(token); }
         else p && p.rej(r);
       },
       error_callback: (e) => { const p = pendingAuth; pendingAuth = null; p && p.rej(e); },
@@ -30,7 +33,7 @@
     return tokenClient;
   }
   function requestToken(prompt) {
-    return new Promise((res, rej) => { pendingAuth = { res, rej }; initClient().requestAccessToken({ prompt }); });
+    return new Promise((res, rej) => { pendingAuth = { res, rej }; const o = { prompt }; if (email && !/select_account/.test(prompt)) o.hint = email; initClient().requestAccessToken(o); });
   }
   async function getToken() {
     if (token && Date.now() < tokenExp) return token;
@@ -215,20 +218,31 @@
   function setStatus(t, ms) { const el = document.getElementById("syncStatus"); if (!el) return; el.textContent = t; clearTimeout(statusTimer); if (ms) statusTimer = setTimeout(() => (el.textContent = ""), ms); }
 
   let readyResolve; const ready = new Promise((r) => (readyResolve = r));
+  async function fetchEmail() {
+    try { const r = await (await gfetch(`${API}/about?fields=user(emailAddress)`)).json(); email = (r.user && r.user.emailAddress) || email; saveAuth(); } catch (e) {}
+    const el = document.getElementById("acctEmail"); if (el) el.textContent = email;
+  }
+  async function start(g) { await loadData(); if (g) g.remove(); readyResolve(true); fetchEmail(); }
   function showGate() {
     const g = document.createElement("div"); g.id = "gate";
-    g.innerHTML = `<div class="gate-card"><h2>التوثيقات المالية</h2><p>اضغط للاتصال بـ Google Drive. يطلب Google موافقتك في أول مرة.</p><button type="button" id="gateBtn">الاتصال بالدرايف</button><p id="gateMsg" class="msg"></p></div>`;
+    g.innerHTML = `<div class="gate-card"><h2>التوثيقات المالية</h2><p>${email ? "انتهت جلسة الدرايف. اضغط للمتابعة بحساب " + email + "." : "اضغط للاتصال بـ Google Drive. يطلب Google موافقتك في أول مرة فقط."}</p><button type="button" id="gateBtn">${email ? "متابعة" : "الاتصال بالدرايف"}</button><p id="gateMsg" class="msg"></p></div>`;
     document.body.appendChild(g);
     document.getElementById("gateBtn").onclick = async () => {
       const m = document.getElementById("gateMsg"); m.textContent = "جارٍ الاتصال…";
-      try { await requestToken(token ? "" : "consent"); m.textContent = "جارٍ تحميل البيانات…"; await loadData(); g.remove(); readyResolve(true); }
+      try { await requestToken(email ? "" : "consent"); m.textContent = "جارٍ تحميل البيانات…"; await start(g); }
       catch (e) { m.textContent = "تعذّر الاتصال: " + (e && (e.message || e.type || e.error) || e); }
     };
   }
-  window.addEventListener("load", () => {
+  window.addEventListener("load", async () => {
     if (!CFG.clientId || !window.google) { document.body.insertAdjacentHTML("afterbegin", '<div class="notice err">إعدادات الاتصال ناقصة (Client ID).</div>'); return; }
+    if (token && Date.now() < tokenExp) { try { await start(null); return; } catch (e) { token = null; } }
     showGate();
   });
+  window.appAuth = {
+    email: () => email,
+    async switchAccount() { if (window.appStore) await flush().catch(() => {}); try { localStorage.removeItem(AUTH_KEY); } catch (e) {} token = null; email = "";
+      await requestToken("select_account consent"); await fetchEmail(); location.reload(); },
+  };
 
   window.claude = {
     async use(name) {
