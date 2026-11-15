@@ -171,10 +171,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794746786";</script>
-<script src="config.js?v=1794746786"></script>
+<script>window.APP_VERSION = "1794747280";</script>
+<script src="config.js?v=1794747280"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794746786"></script>
+<script src="platform.js?v=1794747280"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -695,13 +695,28 @@ const gw = (gd, m, f) => gd === "f" ? f : m;
 const shortName = v => v.shortName || (() => { const t=(v.name||"").trim().split(/\s+/); return t.length>1 ? t[0]+" "+t[t.length-1] : (v.name||""); })();
 const xmlEsc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
+const DOCX_T = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const editLink = id => `<a href="https://docs.google.com/document/d/${esc(id)}/edit" target="_blank" rel="noopener">تعديل Word</a>`;
+async function wordToPdf(wordId, folder, base){
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: wordId});
+  const b64 = findB64(r, 0).replace(/\s/g, ""); if(!b64) throw {code:"tool_error", message:"تعذّر تحميل ملف Word من الدرايف."};
+  const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: DOCX_T, base64Content: b64});
+  const gid = payloadId(gr);
+  try{
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
+    const p64 = findB64(ex, 0); if(!p64) throw {code:"tool_error", message:"تعذّر تحويل العقد إلى PDF."};
+    return await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type: "application/pdf"}), folder, base);
+  } finally { if(gid) await trash(gid).catch(() => {}); }
+}
+
 function contractDoc(a){ return ((a && a.docs) || []).find(d => d.type === "عقد العمل"); }
 
 function contractBox(p, pos, a){
   if(!pos.title_m || !pos.duties) return "";
   const cd = contractDoc(a);
-  const links = cd ? `<span class="current">العقد: ${dlink(cd.fileId, "PDF")}${cd.wordId ? " · " + dlink(cd.wordId, "Word") : ""}</span>` : "";
-  return `<div class="cbox">${links}<button type="button" class="ghost" data-contract="${esc(a && a.personKey ? "1" : "")}" ${a && a.personKey ? "" : "disabled"}>${cd ? "إعادة إنشاء العقد" : "إنشاء العقد"}</button><span class="cmsg msg" aria-live="polite"></span></div>`;
+  const links = cd ? `<span class="current">العقد: ${cd.fileId ? dlink(cd.fileId, "PDF") : '<span class="review">PDF غير منشأ</span>'}${cd.wordId ? " · " + editLink(cd.wordId) : ""}</span>` : "";
+  const dis = a && a.personKey ? "" : "disabled";
+  return `<div class="cbox">${links}<button type="button" class="ghost" data-contract="1" ${dis}>${cd ? "إعادة إنشاء Word وPDF" : "إنشاء Word وPDF"}</button><button type="button" class="ghost" data-contract="1" data-wordonly="1" ${dis}>Word فقط</button>${cd && cd.wordId ? `<button type="button" class="ghost" data-c2pdf="1">تحويل إلى PDF</button>` : ""}<span class="cmsg msg" aria-live="polite"></span></div>`;
 }
 
 function repFor(p, pos){
@@ -743,6 +758,25 @@ function fillXml(xml, v){
     x = x.slice(0, st) + v.duties.map(d => para.split("{{DUTY}}").join(xmlEsc(d))).join("") + x.slice(en);
   }
   return x;
+}
+
+async function contractToPdf(btn){
+  const cardEl = btn.closest(".card"), cmsg = cardEl.querySelector(".cmsg");
+  const say = (t, err) => { cmsg.className = "cmsg msg" + (err ? " err" : ""); cmsg.textContent = t; if(err) notice("العقد: " + t, true); };
+  const p = projects[current], key = cardEl.dataset.key, a = assignments[key], cd = contractDoc(a);
+  if(!cd || !cd.wordId) return say("لا يوجد ملف Word.", true);
+  if(!mcp) return say("الوصول إلى Google Drive غير متاح في هذا العرض.", true);
+  btn.disabled = true;
+  try{
+    say("جارٍ تحويل النسخة المعدّلة إلى PDF…");
+    const pos = (p.positions || []).find(x => pid(x) === cardEl.dataset.pos) || {}, v = people[a.personKey] || {};
+    const pdf = await wordToPdf(cd.wordId, a.folderId, `${pos.code} - عقد عمل - ${v.nameEn || shortName(v)}`);
+    const docs = (a.docs || []).map(d => d.type === "عقد العمل" ? {...d, fileId: pdf.id, fileName: pdf.title} : d);
+    await db.doc("assignments/" + key).update({docs});
+    if(cd.fileId) await trash(cd.fileId).catch(() => {});
+    say("تم التحويل إلى PDF.");
+  }catch(e){ say(e && e.message && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
+  btn.disabled = false;
 }
 
 async function makeContract(btn){
@@ -789,20 +823,13 @@ async function makeContract(btn){
     }
     say("جارٍ حفظ نسخة Word…");
     const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folderId, base);
-    say("جارٍ تحويل العقد إلى PDF…");
-    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
-    const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folderId, contentMimeType: DOCX, base64Content: b64});
-    const gid = payloadId(gr);
-    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
-    const pdf64 = findB64(ex, 0);
-    if(!pdf64) throw {code:"tool_error", message:"تعذّر تحويل العقد إلى PDF. نسخة Word محفوظة."};
-    const pdf = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folderId, base);
-    await trash(gid);
+    let pdf = null;
+    if(!btn.dataset.wordonly){ say("جارٍ تحويل العقد إلى PDF…"); pdf = await wordToPdf(w.id, folderId, base); }
     const docs = ((a.docs) || []).filter(d => d.type !== "عقد العمل");
-    docs.push({type:"عقد العمل", fileId: pdf.id, fileName: pdf.title, wordId: w.id, expiry:"", addedAt: today()});
+    docs.push({type:"عقد العمل", fileId: pdf ? pdf.id : "", fileName: pdf ? pdf.title : "", wordId: w.id, expiry:"", addedAt: today()});
     await db.doc("assignments/" + key).update({docs, folderId});
-    if(cd){ await trash(cd.fileId); if(cd.wordId) await trash(cd.wordId); }
-    say("تم إنشاء العقد.");
+    if(cd){ if(cd.fileId) await trash(cd.fileId).catch(() => {}); if(cd.wordId) await trash(cd.wordId).catch(() => {}); }
+    say(pdf ? "تم إنشاء العقد." : "تم إنشاء Word. اضغط «تعديل Word»، وبعد الانتهاء اضغط «تحويل إلى PDF».");
   }catch(e){ btn.disabled = false; say(e && e.message && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
 }
 
@@ -1741,7 +1768,7 @@ function exCard(p, e){
   const has = x => forms.includes(x);
   const T = exTotals(e, true), thr = thresholdFor(p, T.total);
   const fileLink = (o, l) => o ? dlink(o.pdf || o.xlsx || o.id, l) : "";
-  const status = forms.map(x => { const o = files[x]; const ok = Array.isArray(o) ? o.length : !!o;
+  const status = forms.map(x => { const o = files[x]; const ok = Array.isArray(o) ? o.length : !!(o && (o.pdf || o.id || o.xlsx));
     return `<span class="pill ${ok ? "read" : (cat.docs[x] === "req" ? "err" : "")}">${FORM_CODE[x] || x} ${ok ? "✓" : "✗"}</span>`; }).join("")
     + att.map(t => `<span class="pill ${attFile(e, t) ? "read" : (cat.docs[t] === "req" ? "err" : "")}">${esc(t)} ${attFile(e, t) ? "✓" : "✗"}</span>`).join("");
   const inp = (n, l, v, type, extra) => `<div><label>${l}</label><input name="${n}" ${type ? `type="${type}"` : ""} value="${esc(v ?? "")}" ${extra || ""}></div>`;
@@ -1795,6 +1822,8 @@ function exCard(p, e){
     ${sec("PO", "PO — أمر شراء", `<div class="sgrid">${inp("poDate", "تاريخ أمر الشراء", f.poDate, "date")}${inp("delCharge", "أجور التوصيل", f.delCharge ?? 0, "number")}${inp("discount", "الخصم", f.discount ?? 0, "number")}</div>`)}
     ${sec("CONTRACT", "Contract — العقد", `<div class="sgrid">${inp("contractNo", "رقم العقد", f.contractNo)}${inp("cDate", "تاريخ تحرير العقد", f.cDate, "date")}${inp("cStart", "بداية التنفيذ", f.cStart, "date")}${inp("cEnd", "نهاية التنفيذ", f.cEnd, "date")}</div>
       <label>المهام والمخرجات (مهمة في كل سطر)</label><textarea name="cDuties" rows="6" style="width:100%">${esc(f.cDuties || "")}</textarea>
+      <div class="inl"><button type="button" class="ghost" data-ex="genword">إنشاء Word فقط</button>
+        ${(files.CONTRACT || {}).word ? `${editLink(files.CONTRACT.word)} <button type="button" class="ghost" data-ex="c2pdf">تحويل إلى PDF</button>${files.CONTRACT.pdf ? "" : ' <span class="review">PDF غير منشأ</span>'}` : ""}</div>
       <div class="file"><label style="margin:0">أو ارفع العقد الموقّع (يحل محل المولَّد)</label><input type="file" name="up_CONTRACT" accept="application/pdf,image/jpeg,image/png"></div>`)}
     ${sec("GRN", "GRN — محضر استلام مواد", `<div class="sgrid">${inp("grnDate", "تاريخ الاستلام", f.grnDate, "date")}${inp("grnLoc", "موقع الاستلام", f.grnLoc ?? "مكتب")}${inp("supInv", "رقم فاتورة المورد", f.supInv)}</div>`)}
     ${sec("SRN", "SRN — محضر استلام خدمة", `<div class="sgrid">${inp("srnDate", "التاريخ", f.srnDate, "date")}${has("CONTRACT") ? "" : inp("contractNo", "رقم العقد", f.contractNo)}${inp("srnPct", "النسبة من العمل الكلي %", f.srnPct ?? 100, "number")}</div>`)}
@@ -1968,9 +1997,9 @@ async function exGenerate(card, codes, say){
     say("جارٍ الحفظ…");
     const e = await exSave(card, say), key = card.dataset.exKey;
     const cat = exCat(p, e);
-    const list = (codes || exForms(cat)).filter(c => (FORM_TPL[c] || c === "CONTRACT") && !(c === "INV" && (e.f || {}).invSrc !== "system"));
+    const list = (codes && codes[0] === "CONTRACT_WORD" ? ["CONTRACT"] : (codes || exForms(cat))).filter(c => (FORM_TPL[c] || c === "CONTRACT") && !(c === "INV" && (e.f || {}).invSrc !== "system"));
     if(list.includes("RCPT") && !(e.f || {}).rcptDate){ say("أدخل تاريخ الإيصال أولاً.", true); return; }
-    for(const c of list){ if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); }
+    for(const c of list){ if(c === "CONTRACT" && codes && codes[0] === "CONTRACT_WORD"){ await exContract(p, e, say, true); continue; } if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); }
     e.done = !!(e.files || {}).RCPT;
     await db.doc("expenses/" + key).set(e);
     editing = false; exOpen.add(key); render(true);
@@ -1995,6 +2024,19 @@ async function exClick(t){
   if(a === "itdel"){ const tb = t.closest("tbody"); if(tb.children.length > 1) t.closest("tr").remove(); else t.closest("tr").querySelectorAll("input").forEach(i => i.value = ""); editing = true; return; }
   if(a === "save"){ try{ say("جارٍ الحفظ…"); await exSave(card, say); editing = false; say("تم الحفظ."); render(true); }catch(err){ say(mcpMessage(err), true); } return; }
   if(a === "gen") return exGenerate(card, [t.dataset.form], say);
+  if(a === "genword") return exGenerate(card, ["CONTRACT_WORD"], say);
+  if(a === "c2pdf"){
+    const e = expenses[card.dataset.exKey], o = ((e || {}).files || {}).CONTRACT; if(!o || !o.word) return say("لا يوجد ملف Word.", true);
+    if(!mcp) return say("الوصول إلى Google Drive غير متاح في هذا العرض.", true);
+    try{ say("جارٍ تحويل النسخة المعدّلة إلى PDF…"); const folder = await exFolder(p, e);
+      const pdf = await wordToPdf(o.word, folder, o.base || ("عقد - " + (e.title || e.id)));
+      if(o.pdf) await trash(o.pdf).catch(() => {});
+      const ne = JSON.parse(JSON.stringify(e)); ne.files.CONTRACT = {...o, pdf: pdf.id, at: today()};
+      await db.doc("expenses/" + card.dataset.exKey).set(ne); expenses[card.dataset.exKey] = ne; editing = false; exOpen.add(card.dataset.exKey); render(true);
+      const m = document.querySelector(`[data-ex-key="${CSS.escape(card.dataset.exKey)}"] .exmsg`); if(m){ m.className = "msg exmsg ok"; m.textContent = "تم التحويل إلى PDF."; }
+    }catch(err){ say(err && err.code === "tool_error" ? err.message : mcpMessage(err), true); }
+    return;
+  }
   if(a === "genall") return exGenerate(card, null, say);
   if(a === "del"){
     if(!confirmClick(t, "اضغط مرة أخرى للحذف")) return;
@@ -2009,7 +2051,7 @@ async function loadDocxTpl(id){
   const zip = await JSZip.loadAsync(b64, {base64: true});
   return xTpl["d:" + id] = {b64, xml: await zip.file("word/document.xml").async("string")};
 }
-async function exContract(p, e, say){
+async function exContract(p, e, say, wordOnly){
   const v = exPerson(e), f = e.f || {}, pos = (p.positions || []).find(x => pid(x) === e.line) || {}, ex = p.expense || {};
   const cur = ex.currency || (p.contract || {}).currency || "";
   if(!v) throw {code:"tool_error", message:"اختر المتعاقد من قائمة الأشخاص أو أضفه."};
@@ -2038,14 +2080,10 @@ async function exContract(p, e, say){
   const blob = await zip.generateAsync({type: "blob", mimeType: DOCX, compression: "DEFLATE", compressionOptions: {level: 9}});
   const folder = await exFolder(p, e), base = `عقد${f.contractNo ? " " + f.contractNo : ""} - ${v.nameEn || nm} - ${e.title || e.id}`.replace(/[\\/:*?"<>|]/g, " ");
   const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folder, base);
-  say("جارٍ تحويل العقد إلى PDF…");
-  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
-  const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: DOCX, base64Content: b64});
-  const gid = payloadId(gr); let pdf = null;
-  try{ const exr = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"}); const p64 = findB64(exr, 0);
-    if(p64) pdf = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type: "application/pdf"}), folder, base); } finally { if(gid) await trash(gid); }
+  let pdf = null;
+  if(!wordOnly){ say("جارٍ تحويل العقد إلى PDF…"); pdf = await wordToPdf(w.id, folder, base); }
   const old = (e.files || {}).CONTRACT; if(old){ for(const id of [old.id, old.pdf, old.xlsx, old.word]) if(id) await trash(id).catch(() => {}); }
-  e.files = e.files || {}; e.files.CONTRACT = {pdf: pdf ? pdf.id : "", word: w.id, at: today()};
+  e.files = e.files || {}; e.files.CONTRACT = {pdf: pdf ? pdf.id : "", word: w.id, base, at: today()};
 }
 
 /* أجزاء التوثيق لعملية صرف: من الأقدم إلى الأحدث ثم المرفقات */
@@ -2226,6 +2264,7 @@ document.addEventListener("click", e => {
   else if(t.dataset.addstaff !== undefined) addStaff(t);
   else if(t.dataset.replace !== undefined){ const c = t.closest(".card"); c.dataset.replace = c.dataset.replace === "1" ? "" : "1"; syncCard(c); }
   else if(t.dataset.dropslot){ for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => k !== t.dataset.dropslot); render(true); }
+  else if(t.dataset.c2pdf !== undefined) contractToPdf(t);
   else if(t.dataset.contract !== undefined) makeContract(t);
   else if(t.id === "saveSettings") saveSettings();
   else if(t.id === "exportXl") exportExcel(t);
