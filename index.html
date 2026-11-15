@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794764935";</script>
-<script src="config.js?v=1794764935"></script>
+<script>window.APP_VERSION = "1794765290";</script>
+<script src="config.js?v=1794765290"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794764935"></script>
+<script src="platform.js?v=1794765290"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2252,7 +2252,8 @@ async function exSave(card, say){
   const p = projects[current], key = card.dataset.exKey, e = exRead(card);
   const sel = card.querySelector('[name="s_person"]');
   const fileOf = n => { const i = card.querySelector(`[name="${n}"]`); return i && i.files && i.files[0]; };
-  if(sel && (sel.value === "__new" || (e.personKey && (fileOf("np_id") || fileOf("np_cv"))))){
+  const npName = ((card.querySelector('[name="np_name"]') || {}).value || "").trim();
+  if(sel && ((sel.value === "__new" && npName) || (sel.value !== "__new" && e.personKey && (fileOf("np_id") || fileOf("np_cv"))))){
     let pk = e.personKey, person;
     if(sel.value === "__new"){
       const g = n => (card.querySelector(`[name="${n}"]`) || {}).value || "";
@@ -2381,7 +2382,10 @@ async function exGenerate(card, codes, say){
     const cat = exCat(p, e);
     const list = (codes && codes[0] === "CONTRACT_WORD" ? ["CONTRACT"] : (codes || exForms(cat))).filter(c => (FORM_TPL[c] || c === "CONTRACT") && !(c === "INV" && (e.f || {}).invSrc !== "system"));
     if(list.includes("RCPT") && !(e.f || {}).rcptDate){ say("أدخل تاريخ الإيصال أولاً.", true); return; }
-    for(const c of list){ if(c === "CONTRACT" && codes && codes[0] === "CONTRACT_WORD"){ await exContract(p, e, say, true); continue; } if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); }
+    const keep = async () => { e.done = !!(e.files || {}).RCPT; await db.doc("expenses/" + key).set(e); expenses[key] = e; };
+    try{
+      for(const c of list){ if(c === "CONTRACT" && codes && codes[0] === "CONTRACT_WORD"){ await exContract(p, e, say, true); await keep(); continue; } if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); await keep(); }
+    }catch(err){ await keep().catch(() => {}); throw err; }
     e.done = !!(e.files || {}).RCPT;
     await db.doc("expenses/" + key).set(e);
     editing = false; exOpen.add(key); render(true);
@@ -2436,7 +2440,7 @@ async function loadDocxTpl(id){
 async function exContract(p, e, say, wordOnly){
   const v = exPerson(e), f = e.f || {}, pos = (p.positions || []).find(x => pid(x) === e.line) || {}, ex = p.expense || {};
   const cur = ex.currency || (p.contract || {}).currency || "";
-  if(!v) throw {code:"tool_error", message:"اختر المتعاقد من قائمة الأشخاص أو أضفه."};
+  if(!v) throw {code:"tool_error", message:"المتعاقد غير محدد: في قسم «المورد / المتعاقد» اختره من القائمة، أو اختر «+ شخص جديد» واكتب اسمه."};
   if(!v.gender) throw {code:"tool_error", message:"جنس المتعاقد غير مسجّل. أدخله أو اطلب من Claude قراءة الهوية."};
   if(!f.cStart || !f.cEnd) throw {code:"tool_error", message:"أدخل بداية التنفيذ ونهايته."};
   const dl = (f.cDuties || "").split("\n").map(x => x.trim()).filter(Boolean); if(!dl.length) throw {code:"tool_error", message:"أدخل مهام العقد."};
