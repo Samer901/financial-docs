@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794758950";</script>
-<script src="config.js?v=1794758950"></script>
+<script>window.APP_VERSION = "1794764005";</script>
+<script src="config.js?v=1794764005"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794758950"></script>
+<script src="platform.js?v=1794764005"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1179,6 +1179,13 @@ async function tsSaveInputs(){
   return {weekend, hours, hol: hol.map(d => +d.slice(8)), leave, dim, y, m, prev};
 }
 
+/* القوالب المحفوظة من Excel تضع النصوص في sharedStrings؛ نحوّلها إلى نصوص داخل الورقة ليعمل الملء */
+async function sheetXml(zip){
+  let x = await zip.file("xl/worksheets/sheet1.xml").async("string");
+  const sf = zip.file("xl/sharedStrings.xml"); if(!sf || !/ t="s"/.test(x)) return x;
+  const si = [...(await sf.async("string")).matchAll(/<si>([\s\S]*?)<\/si>|<si\/>/g)].map(m => m[1] || "<t></t>");
+  return x.replace(/<c ([^>]*?)t="s"([^>]*)>\s*<v>(\d+)<\/v>\s*<\/c>/g, (all, a, b, n) => si[+n] === undefined ? all : `<c ${a}t="inlineStr"${b}><is>${si[+n].replace(/<rPh\b[\s\S]*?<\/rPh>|<phoneticPr[^>]*\/>/g, "")}</is></c>`);
+}
 async function loadTsTemplate(){
   if(tsTpl && tsTpl.id === templates.timesheet) return tsTpl;
   if(!templates.timesheet) throw {code:"tool_error", message:"لم يُحدد قالب جدول الدوام."};
@@ -1186,7 +1193,7 @@ async function loadTsTemplate(){
   const b64 = findB64(r, 0).replace(/\s/g,"");
   if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة قالب جدول الدوام."};
   const zip = await JSZip.loadAsync(b64, {base64:true});
-  tsTpl = {id: templates.timesheet, b64, xml: await zip.file("xl/worksheets/sheet1.xml").async("string")};
+  tsTpl = {id: templates.timesheet, b64, xml: await sheetXml(zip)};
   return tsTpl;
 }
 
@@ -1241,7 +1248,7 @@ function fillTs(xml, d){
     x = setCell(x, c+"10", isH ? d.hours : null);
     x = setCell(x, c+"11", isL ? d.hours : null);
   }
-  return stretchRows(uniformCols(x, 5, 35, 7.2), 28, 1.45);
+  return x;
 }
 
 async function tsMake(btn){
@@ -1278,7 +1285,7 @@ async function tsMake(btn){
       const gid = payloadId(gr);
       let pdfId = "";
       try{
-        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: false, range: [28, 35]}});
+        const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf(tpl)});
         const pdf64 = findB64(ex, 0);
         if(pdf64){ const pu = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
       } finally { await trash(gid); }
@@ -1342,7 +1349,7 @@ async function loadX(id){
   const b64 = findB64(r, 0).replace(/\s/g,"");
   if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة القالب من الدرايف."};
   const zip = await JSZip.loadAsync(b64, {base64:true});
-  return xTpl[id] = {b64, xml: await zip.file("xl/worksheets/sheet1.xml").async("string")};
+  return xTpl[id] = {b64, xml: await sheetXml(zip)};
 }
 
 async function buildX(tpl, xml){
@@ -1352,14 +1359,32 @@ async function buildX(tpl, xml){
   return zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
 }
 
-async function saveXP(blob, folder, base, portrait, range, scale){
+/* إعدادات التحويل إلى PDF تُقرأ من القالب نفسه (الاتجاه، الملاءمة، الهوامش، منطقة الطباعة، التوسيط) */
+async function pageOf(tpl){
+  if(tpl.page) return tpl.page;
+  const zip = await JSZip.loadAsync(tpl.b64, {base64:true});
+  const sx = await zip.file("xl/worksheets/sheet1.xml").async("string"), wb = await zip.file("xl/workbook.xml").async("string");
+  const tag = n => (sx.match(new RegExp(`<${n}\\b[^>]*>`)) || [""])[0], at = (t, n) => { const m = t.match(new RegExp(`\\b${n}="([^"]*)"`)); return m ? m[1] : null; };
+  const ps = tag("pageSetup"), pm = tag("pageMargins"), po = tag("printOptions");
+  const fit = /<pageSetUpPr\b[^>]*fitToPage="(1|true)"/.test(sx);
+  const fw = +(at(ps, "fitToWidth") ?? 1), fh = +(at(ps, "fitToHeight") ?? 1);
+  const o = {portrait: at(ps, "orientation") !== "landscape", scale: !fit ? (+(at(ps, "scale") || 100) < 100 ? 2 : 1) : (fw && fh ? 4 : fw ? 2 : fh ? 3 : 1),
+    size: at(ps, "paperSize") === "1" ? "letter" : "A4", margins: ["top", "bottom", "left", "right"].map(k => at(pm, k)),
+    hcenter: /horizontalCentered="(1|true)"/.test(po), vcenter: /verticalCentered="(1|true)"/.test(po), gridlines: /gridLines="(1|true)"/.test(po)};
+  const dn = [...wb.matchAll(/<definedName\b([^>]*)>([^<]*)<\/definedName>/g)].find(m => /_xlnm\.Print_Area/.test(m[1]) && /localSheetId="0"/.test(m[1]));
+  const rg = dn && dn[2].match(/\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)/);
+  const cn = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  if(rg) o.range = [+rg[2] - 1, cn(rg[1]) - 1, +rg[4], cn(rg[3])];
+  return tpl.page = o;
+}
+async function saveXP(blob, folder, base, tpl){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
   const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
   const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
   const gid = payloadId(gr); let pdf = "";
   try{
-    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: {portrait: !!portrait, range, scale}});
+    const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf(tpl)});
     const p64 = findB64(ex, 0);
     if(p64){ const pu = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
   } finally { if(gid) await trash(gid); }
@@ -1438,8 +1463,7 @@ async function prMake(btn){
       for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
     }
     for(let r = 7 + staff.length; r <= 19; r++) x = x.replace(new RegExp(`<row r="${r}"(?![^>]*hidden)`), `<row r="${r}" hidden="1"`);
-    x = stretchRows(x, 24, 1.25);
-    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, false, [24, 9]);
+    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, pt);
     await trashSet(files.payroll); files.payroll = pf;
     // الإيصالات والفواتير
     const vt = await loadX(templates.voucher);
@@ -1451,9 +1475,8 @@ async function prMake(btn){
       let vx = rep(vt.xml, {DATE: date, NO: `${prMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
-      vx = stretchRows(vx, 37, 1.5);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
-      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, true, [0, 1, 37, 13], 2);
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, vt);
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
     }
     await db.doc("payroll/" + p.code + "__" + prMonth).update({files});
@@ -1849,7 +1872,7 @@ async function saveDuties(){
 
 /* ===== أنشطة المشروع: إعداد بنود الصرف والتوثيقات ===== */
 let expCfg = null, selCats = new Set();
-const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","جدول مستفيدين من المواصلات"],["INV","فاتورة (من المورد أو يولّدها النظام)"],["RCPT","إيصال دفع"]];
+const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","مستفيدو المواصلات"],["INV","فاتورة (من المورد أو يولّدها النظام)"],["RCPT","إيصال دفع"]];
 const FORM_CODE = {CONTRACT:"Contract", ATT:"Attendance", RCPT:"Receipt"};
 const DROPPED = ["سند ملكية","صور توثيقية","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","فاتورة المورد"];
 const NUMBERED = [["PR","طلب الشراء"],["PO","أمر الشراء"],["GRN","محضر استلام المواد"],["SRN","محضر استلام الخدمة"],["RCPT","إيصال الدفع"]];
@@ -2045,7 +2068,6 @@ function thresholdFor(p, amount){
 let expenses = {}; const exOpen = new Set();
 const FORM_TPL = {PR:"12qWdSZPjjusDiaby5mEoA-pKCUWyTrsf", RFQ:"1oHi5wso6NHXPnp6yG-QsDGV9xZyBmqnV", PO:"1iFAXyXHY20nfRdajZdmcz5IrV2yhH2_I", GRN:"1g-H_yHG-OXRffP119W3e5vtMfAlZeTSw",
   INV:"1Q3tCrozyju8A2Fyaj4MbKY1TxqXQNwN0", RCPT:"1G2RXryPZnqqSGt8KTjMAuSp51X4IVQRF", SRN:"1paJ5g--brYwXGCdvK86O3cfVDItsdR73", ATT:"1pjij7De75nVHEmlJmqvAlzUKlehp-Xu3"};
-const FORM_RANGE = {PR:[60,10], RFQ:[73,9], PO:[45,8], GRN:[65,7], INV:[36,9], RCPT:[30,14], SRN:[26,8], ATT:[15,8]};
 const UPLOAD_FORMS = []; // كل النماذج تُولَّد؛ العقد يُولَّد من قالب الخبير ويمكن رفع نسخته الموقّعة
 const EXPERT_TPL = "19FU9mah6lSqRgGboaH6PIwOpPuisqmOP";
 const exPerson = e => e.personKey ? people[e.personKey] : null;
@@ -2309,7 +2331,7 @@ async function exGenForm(p, e, code, say){
     let x = tpl.xml;
     for(const [ref, v] of Object.entries(exFill(p, e, code, i))) x = setCell(x, ref, v === undefined ? "" : v);
     const base = `${FORM_CODE[code] || code}${e.nums[code] ? " " + e.nums[code] : ""}${copies > 1 ? " - نسخة " + (i + 1) : ""} - ${e.title || e.id}`;
-    out.push(await saveXP(await buildX(tpl, x), folder, base, true, FORM_RANGE[code]));
+    out.push(await saveXP(await buildX(tpl, x), folder, base, tpl));
   }
   const old = (e.files || {})[code];
   for(const o of [].concat(old || [])) await trashSet(o).catch(() => {});
