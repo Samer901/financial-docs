@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794765406";</script>
-<script src="config.js?v=1794765406"></script>
+<script>window.APP_VERSION = "1794765535";</script>
+<script src="config.js?v=1794765535"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794765406"></script>
+<script src="platform.js?v=1794765535"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2502,18 +2502,46 @@ function renderReport(p){
     <div class="sgrid"><div><label>حتى نهاية شهر</label>${monthPick("rp", rpMonth)}</div></div>
     <p class="code">يُملأ سجل الصرف (Transactions1) والملخص من إيصالات الرواتب وإيصالات المصاريف حتى نهاية الشهر المختار. الوصف من أسماء البنود بالإنجليزية في الموازنة. طريقة الدفع: نقدي (C).</p>
     <h3>سعر صرف اليورو لكل شهر (من InforEuro: كم ${esc(ex.currency || (p.contract || {}).currency || "ليرة")} لكل 1 يورو)</h3>
-    <div class="sgrid">${months.map(m => `<div><label>${MON_AR[+m.slice(5)-1]} ${m.slice(0,4)}</label><input type="number" min="0" step="any" data-rate="${m}" value="${esc(rates[m] ?? "")}"></div>`).join("")}</div>
+    ${rateRows(rates, tx)}
     <p class="code">المبلغ المعتمد والمبالغ المستلمة واسم المنظمة تُعدَّل من تبويب «المشروع» ← البيانات الأساسية.</p>
-    <p class="code">عدد الحركات: ${tx.length} · المجموع: ${tx.reduce((s, t) => s + t.amount, 0).toLocaleString("en-US")}${missing.length ? ` · <span class="review">ينقص سعر صرف: ${missing.join("، ")}</span>` : ""}</p>
+    <p class="code">عدد الحركات: ${tx.length} · المجموع: ${tx.reduce((s, t) => s + t.amount, 0).toLocaleString("en-US")}${missing.length ? ` · <span class="review">ينقص سعر صرف: ${missing.map(monLabel).join("، ")}</span>` : ""}</p>
     <div class="row"><span class="current">${last ? "آخر تقرير لهذا الشهر: " + dlink(last.xlsx, "Excel") + (last.pdf ? " · " + dlink(last.pdf, "PDF") : "") : ""}</span>
-      <span><span id="rp-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" data-rp="save">حفظ</button> <button type="button" data-rp="make">إنشاء التقرير</button></span></div>
+      <span><span id="rp-msg" class="msg" aria-live="polite"></span> <button type="button" data-rp="make">إنشاء التقرير</button></span></div>
   </details>`;
 }
 
+/* أسعار صرف اليورو: قائمة شهر/سنة + سعر، تُعرض نصاً مع تعديل وحذف */
+let rateEdit = "";
+function rateRows(rates, tx){
+  const used = new Set(tx.map(t => t.month)), keys = Object.keys(rates).sort();
+  const miss = [...used].filter(m => !num(rates[m])).sort()[0] || curYM, yNow = +miss.slice(0, 4), mNow = +miss.slice(5);
+  const row = m => rateEdit === m
+    ? `<tr><td>${monLabel(m)}</td><td><input type="number" min="0" step="any" id="rateEditVal" value="${esc(rates[m])}" style="max-width:140px"></td>
+        <td><button type="button" class="ghost" data-rate-act="save" data-m="${m}">حفظ</button> <button type="button" class="linkbtn" data-rate-act="cancel">إلغاء</button></td></tr>`
+    : `<tr><td>${monLabel(m)}</td><td>${Number(rates[m]).toLocaleString("en-US")}${used.has(m) ? "" : ' <span class="code">(لا حركات)</span>'}</td>
+        <td><button type="button" class="linkbtn" data-rate-act="edit" data-m="${m}">تعديل</button> <button type="button" class="x" data-rate-act="del" data-m="${m}">حذف</button></td></tr>`;
+  return `${keys.length ? `<table class="ptab" style="max-width:520px"><thead><tr><th>الشهر</th><th>السعر</th><th></th></tr></thead><tbody>${keys.map(row).join("")}</tbody></table>` : '<p class="code">لم يُدخل أي سعر بعد.</p>'}
+    <div class="inl" style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="rateM" aria-label="الشهر" style="width:auto;max-width:140px">${MON_AR.map((n, i) => `<option value="${i + 1}" ${i + 1 === mNow ? "selected" : ""}>${n}</option>`).join("")}</select>
+      <input id="rateY" type="number" min="2000" max="2100" value="${yNow}" aria-label="السنة" style="max-width:90px">
+      <input id="rateV" type="number" min="0" step="any" placeholder="السعر" aria-label="السعر" style="max-width:140px">
+      <button type="button" class="ghost" data-rate-act="add">إضافة</button></div>`;
+}
+async function rateAct(t){
+  const p = projects[current], ex = p.expense || {}, rates = {...(ex.eurRates || {})}, a = t.dataset.rateAct, m = t.dataset.m;
+  const say = (x, err) => { const el = $("#rp-msg"); if(el){ el.className = "msg" + (err ? " err" : ""); el.textContent = x; } };
+  if(a === "edit"){ rateEdit = m; renderReport(p); return; }
+  if(a === "cancel"){ rateEdit = ""; renderReport(p); return; }
+  if(a === "add"){ const mm = +$("#rateM").value, yy = +$("#rateY").value, v = Number($("#rateV").value);
+    if(!yy || !(v > 0)) return say("أدخل السنة والسعر.", true);
+    rates[`${yy}-${String(mm).padStart(2, "0")}`] = v; }
+  if(a === "save"){ const v = Number($("#rateEditVal").value); if(!(v > 0)) return say("أدخل سعراً صحيحاً.", true); rates[m] = v; }
+  if(a === "del") delete rates[m];
+  const doc = JSON.parse(JSON.stringify(p)); doc.expense = {...ex, eurRates: rates};
+  try{ await db.doc("projects/" + p.code).set(doc); p.expense = doc.expense; rateEdit = ""; editing = false; renderReport(p); say("تم الحفظ."); }catch(_){ say("تعذّر الحفظ.", true); }
+}
 async function rpSave(){
   const p = projects[current], ex = p.expense || {};
-  const eurRates = {...(ex.eurRates || {})}; document.querySelectorAll("[data-rate]").forEach(i => { if(i.value !== "") eurRates[i.dataset.rate] = Number(i.value); else delete eurRates[i.dataset.rate]; });
-  const o = {eurRates};
+  const o = {};
   await db.doc("projects/" + p.code).update({expense: {...ex, ...o}});
   p.expense = {...ex, ...o};
   return p.expense;
@@ -2847,6 +2875,7 @@ document.addEventListener("click", e => {
   else if(t.dataset.unassign) unassign(t);
   else if(t.dataset.act) actClick(t);
   else if(t.dataset.ex) exClick(t);
+  else if(t.dataset.rateAct) rateAct(t);
   else if(t.dataset.rp){ const say = (x, err) => { const m = $("#rp-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = x; } if(err) notice("التقرير المالي: " + x, true); };
     if(t.dataset.rp === "save") rpSave().then(() => { editing = false; say("تم الحفظ."); }).catch(() => say("تعذّر الحفظ.", true)); else rpMake(say); }
 });
