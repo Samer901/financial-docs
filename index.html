@@ -168,10 +168,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794698616";</script>
-<script src="config.js?v=1794698616"></script>
+<script>window.APP_VERSION = "1794701255";</script>
+<script src="config.js?v=1794701255"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794698616"></script>
+<script src="platform.js?v=1794701255"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1652,7 +1652,15 @@ let expenses = {}; const exOpen = new Set();
 const FORM_TPL = {PR:"12qWdSZPjjusDiaby5mEoA-pKCUWyTrsf", RFQ:"1oHi5wso6NHXPnp6yG-QsDGV9xZyBmqnV", PO:"1iFAXyXHY20nfRdajZdmcz5IrV2yhH2_I", GRN:"1g-H_yHG-OXRffP119W3e5vtMfAlZeTSw",
   INV:"1Q3tCrozyju8A2Fyaj4MbKY1TxqXQNwN0", RCPT:"1G2RXryPZnqqSGt8KTjMAuSp51X4IVQRF", SRN:"1paJ5g--brYwXGCdvK86O3cfVDItsdR73", ATT:"1pjij7De75nVHEmlJmqvAlzUKlehp-Xu3"};
 const FORM_RANGE = {PR:[60,10], RFQ:[73,9], PO:[45,8], GRN:[65,7], INV:[36,9], RCPT:[30,14], SRN:[26,8], ATT:[15,8]};
-const UPLOAD_FORMS = ["CONTRACT"]; // لا قالب لها: تُرفع موقّعة
+const UPLOAD_FORMS = []; // كل النماذج تُولَّد؛ العقد يُولَّد من قالب الخبير ويمكن رفع نسخته الموقّعة
+const EXPERT_TPL = "1B6yU1YnXvZ3-ayPSIZZBy1A_e8edvwID";
+const exPerson = e => e.personKey ? people[e.personKey] : null;
+function attFile(e, t){
+  const a = (e.att || {})[t]; if(a) return a.id;
+  const v = exPerson(e); if(!v) return "";
+  if(t === "صورة هوية") return v.idFileId || ""; if(t === "سيرة ذاتية") return v.cvFileId || "";
+  return "";
+}
 const fLabel = k => { const f = FORMS.find(x => x[0] === k); return (FORM_CODE[k] || k) + (f ? " — " + f[1].replace(/ \(.*\)/, "") : ""); };
 const dmy = s => s ? s.split("-").reverse().join("/") : "";
 const num = v => Number(v) || 0;
@@ -1687,7 +1695,7 @@ function renderExpenses(p){
       <div class="alg" style="grid-template-columns:1fr 1fr">
         <div><label>البند</label><select name="exline">${lines.map(x => `<option value="${esc(pid(x))}">${esc(x.code)} — ${esc(x.title)}</option>`).join("")}<option value="__other">+ مصروف آخر خارج البنود</option></select></div>
         <div class="exother" ${lines.length ? "hidden" : ""}><label>الفئة</label><select name="excat">${(ecfg().categories || []).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select></div>
-        <div style="grid-column:1/-1"><label>الهدف / الوصف</label><input name="extitle" placeholder="مثال: ضيافة ورشة التخطيط"></div>
+        <div style="grid-column:1/-1"><label>الهدف / الوصف</label><input name="extitle" placeholder="يُملأ تلقائياً من البند إن تُرك فارغاً"></div>
       </div>
       <div class="row"><span class="msg" aria-live="polite"></span><button type="button" data-ex="add">إضافة</button></div>
     </details>
@@ -1705,7 +1713,7 @@ function exCard(p, e){
   const fileLink = (o, l) => o ? dlink(o.pdf || o.xlsx || o.id, l) : "";
   const status = forms.map(x => { const o = files[x]; const ok = Array.isArray(o) ? o.length : !!o;
     return `<span class="pill ${ok ? "read" : (cat.docs[x] === "req" ? "err" : "")}">${FORM_CODE[x] || x} ${ok ? "✓" : "✗"}</span>`; }).join("")
-    + att.map(t => `<span class="pill ${(e.att || {})[t] ? "read" : (cat.docs[t] === "req" ? "err" : "")}">${esc(t)} ${(e.att || {})[t] ? "✓" : "✗"}</span>`).join("");
+    + att.map(t => `<span class="pill ${attFile(e, t) ? "read" : (cat.docs[t] === "req" ? "err" : "")}">${esc(t)} ${attFile(e, t) ? "✓" : "✗"}</span>`).join("");
   const inp = (n, l, v, type, extra) => `<div><label>${l}</label><input name="${n}" ${type ? `type="${type}"` : ""} value="${esc(v ?? "")}" ${extra || ""}></div>`;
   const sec = (x, title, body) => show(x) ? `<fieldset class="exs"><legend>${title} ${files[x] ? `<span class="pill read">تم</span>` : ""}</legend>${body}
       <div class="row"><span class="current">${Array.isArray(files[x]) ? files[x].map((o, i) => fileLink(o, "نسخة " + (i + 1))).join(" · ") : fileLink(files[x], "الملف")}</span>
@@ -1733,7 +1741,17 @@ function exCard(p, e){
     <div class="tscroll"><table class="ptab ftab"><thead><tr><th>الوصف</th><th>الوحدة</th><th>الكمية</th><th>التكرار</th><th>السعر المقدر</th>${has("RFQ") || has("PO") || has("INV") ? "<th>سعر المورد</th>" : ""}<th>ملاحظات</th>${has("GRN") ? "<th>ملاحظة الاستلام</th>" : ""}<th></th></tr></thead><tbody>${items}</tbody></table></div>
     <button type="button" class="ghost" data-ex="itadd">+ سطر</button>
     ${thr ? `<p class="${thr.quotes > 1 || thr.tender ? "review" : "code"}">حسب العتبة: ${thr.quotes ? `${thr.quotes} عرض سعر` : "بلا عروض"}${thr.tender ? " · مناقصة" : ""}${thr.opening ? " · محضر فض عروض (يُرفع يدوياً حالياً)" : ""}</p>` : '<p class="code">لم تُحدد عتبات الشراء بعد.</p>'}
-    ${supNeeded ? `<fieldset class="exs"><legend>المورد / المتعاقد</legend><div class="sgrid">
+    ${supNeeded ? `<fieldset class="exs"><legend>المورد / المتعاقد</legend>
+      <div class="sgrid"><div><label>من قائمة الأشخاص</label><select name="s_person"><option value="">— مورد أو جهة (إدخال يدوي) —</option>
+        ${Object.entries(people).sort((a, b) => (a[1].name || "").localeCompare(b[1].name || "", "ar")).map(([pk, v]) => `<option value="${esc(pk)}" ${pk === e.personKey ? "selected" : ""}>${esc(v.name)}</option>`).join("")}
+        <option value="__new">+ شخص جديد</option></select></div>
+        <div class="current" style="align-self:end">${exPerson(e) ? `الهوية: ${exPerson(e).idFileId ? dlink(exPerson(e).idFileId, "✓") : "✗"} · السيرة: ${exPerson(e).cvFileId ? dlink(exPerson(e).cvFileId, "✓") : "✗"}${exPerson(e).status === "read" ? " · تم التحقق" : (exPerson(e).idFileId ? " · بانتظار قراءة الهوية" : "")}` : ""}</div></div>
+      <div class="newperson" hidden><p class="code">بيانات الشخص الجديد: أدخلها يدوياً، أو ارفع الهوية فقط واطلب من Claude استخراجها.</p><div class="sgrid">
+        ${inp("np_name", "الاسم الكامل", "")}${inp("np_father", "اسم الأب", "")}${inp("np_mother", "اسم الأم", "")}${inp("np_dob", "تاريخ الميلاد", "", "date")}${inp("np_nid", "الرقم الوطني", "", "", 'dir="ltr"')}
+        <div><label>الجنس</label><select name="np_gender"><option value="">—</option><option value="m">ذكر</option><option value="f">أنثى</option></select></div>${inp("np_nat", "الجنسية", "")}</div></div>
+      <div class="pfiles" ${exPerson(e) && exPerson(e).idFileId && exPerson(e).cvFileId ? "hidden" : ""}><div class="file"><label style="margin:0">صورة الهوية</label><input type="file" name="np_id" accept="image/jpeg,image/png,application/pdf"></div>
+        <div class="file"><label style="margin:0">السيرة الذاتية</label><input type="file" name="np_cv" accept="application/pdf,.doc,.docx,image/jpeg,image/png"></div></div>
+      <div class="sgrid">
       ${inp("s_name", "الاسم", sup.name)}${inp("s_company", "الاسم التجاري", sup.company)}${inp("s_mobile", "الموبايل", sup.mobile, "", 'dir="ltr"')}
       ${inp("s_email", "البريد", sup.email, "", 'dir="ltr"')}${inp("s_addr", "العنوان", sup.addr)}${inp("s_prof", "المهنة / صفة العقد", sup.prof)}</div></fieldset>` : ""}
     ${sec("PR", "PR — طلب شراء", `<div class="sgrid">${inp("prDate", "تاريخ الطلب", f.prDate, "date")}${inp("delDate", "تاريخ التسليم", f.delDate, "date")}</div>`)}
@@ -1744,8 +1762,9 @@ function exCard(p, e){
       ${inp("payC", "% عند التعاقد", f.payC ?? 0, "number")}${inp("payG", "% عند الاستلام", f.payG ?? 100, "number")}</div>
       <p class="code">عدد النسخ حسب العتبة: ${Math.max(1, thr ? thr.quotes : 1)}.</p>`)}
     ${sec("PO", "PO — أمر شراء", `<div class="sgrid">${inp("poDate", "تاريخ أمر الشراء", f.poDate, "date")}${inp("delCharge", "أجور التوصيل", f.delCharge ?? 0, "number")}${inp("discount", "الخصم", f.discount ?? 0, "number")}</div>`)}
-    ${sec("CONTRACT", "العقد", `<div class="file"><label style="margin:0">العقد الموقّع ${cat.docs.CONTRACT === "req" ? '<span class="req">*</span>' : ""}</label><input type="file" name="up_CONTRACT" accept="application/pdf,image/jpeg,image/png"></div>
-      <div class="sgrid">${inp("contractNo", "رقم العقد", f.contractNo)}</div>`)}
+    ${sec("CONTRACT", "Contract — العقد", `<div class="sgrid">${inp("contractNo", "رقم العقد", f.contractNo)}${inp("cDate", "تاريخ تحرير العقد", f.cDate, "date")}${inp("cStart", "بداية التنفيذ", f.cStart, "date")}${inp("cEnd", "نهاية التنفيذ", f.cEnd, "date")}</div>
+      <label>المهام والمخرجات (مهمة في كل سطر)</label><textarea name="cDuties" rows="6" style="width:100%">${esc(f.cDuties || "")}</textarea>
+      <div class="file"><label style="margin:0">أو ارفع العقد الموقّع (يحل محل المولَّد)</label><input type="file" name="up_CONTRACT" accept="application/pdf,image/jpeg,image/png"></div>`)}
     ${sec("GRN", "GRN — محضر استلام مواد", `<div class="sgrid">${inp("grnDate", "تاريخ الاستلام", f.grnDate, "date")}${inp("grnLoc", "موقع الاستلام", f.grnLoc ?? "مكتب")}${inp("supInv", "رقم فاتورة المورد", f.supInv)}</div>`)}
     ${sec("SRN", "SRN — محضر استلام خدمة", `<div class="sgrid">${inp("srnDate", "التاريخ", f.srnDate, "date")}${has("CONTRACT") ? "" : inp("contractNo", "رقم العقد", f.contractNo)}${inp("srnPct", "النسبة من العمل الكلي %", f.srnPct ?? 100, "number")}</div>`)}
     ${sec("ATT", "Attendance — مستفيدو المواصلات", `<div class="sgrid">${inp("attPeriod", "الفترة", f.attPeriod)}</div>
@@ -1756,7 +1775,7 @@ function exCard(p, e){
       ${f.invSrc !== "system" ? `<div class="file"><label style="margin:0">فاتورة المورد</label><input type="file" name="up_INV" accept="application/pdf,image/jpeg,image/png"></div>` : ""}`)}
     ${sec("RCPT", "Receipt — إيصال دفع", `<div class="sgrid">${inp("rcptDate", "تاريخ الإيصال (يحدد شهر العملية)", f.rcptDate, "date")}${inp("rcptPurpose", "الهدف في الإيصال", f.rcptPurpose, "", 'placeholder="افتراضياً: الهدف / الوصف"')}</div>`)}
     ${att.length ? `<fieldset class="exs"><legend>المستندات المرفقة</legend>${att.map(t => `<div class="file"><label style="margin:0">${esc(t)} ${cat.docs[t] === "req" ? '<span class="req">*</span>' : '<span class="code">(اختياري)</span>'}</label>
-      ${(e.att || {})[t] ? dlink(e.att[t].id, "الملف الحالي") : ""}<input type="file" name="att" data-type="${esc(t)}" accept="application/pdf,image/jpeg,image/png,.doc,.docx"></div>`).join("")}</fieldset>` : ""}`}
+      ${attFile(e, t) ? dlink(attFile(e, t), (e.att || {})[t] ? "الملف الحالي" : "من ملف الشخص") : ""}<input type="file" name="att" data-type="${esc(t)}" accept="application/pdf,image/jpeg,image/png,.doc,.docx"></div>`).join("")}</fieldset>` : ""}`}
     <div class="row"><span class="msg exmsg" aria-live="polite"></span><span>
       <button type="button" class="x" data-ex="del">حذف العملية</button>
       <button type="button" class="ghost" data-ex="save">حفظ</button>
@@ -1768,10 +1787,11 @@ function exRead(card){
   const e = JSON.parse(JSON.stringify(expenses[card.dataset.exKey] || {}));
   const v = n => { const el = card.querySelector(`[name="${n}"]`); return el ? el.value.trim() : undefined; };
   e.f = e.f || {};
-  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose"]
+  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose","cDate","cStart","cEnd","cDuties"]
     .forEach(n => { const x = v(n); if(x !== undefined) e.f[n] = x; });
   if(card.querySelector('[name="s_name"]')) e.f.sup = {name: v("s_name"), company: v("s_company"), mobile: v("s_mobile"), email: v("s_email"), addr: v("s_addr"), prof: v("s_prof")};
   if(v("mode")) e.mode = v("mode");
+  const ps = v("s_person"); if(ps !== undefined && ps !== "__new") e.personKey = ps;
   if(v("title") !== undefined) e.title = v("title");
   const rows = [...card.querySelectorAll("tr[data-it]")];
   if(rows.length) e.items = rows.map(tr => { const q = n => { const el = tr.querySelector(`[name="${n}"]`); return el ? el.value.trim() : ""; };
@@ -1788,16 +1808,34 @@ async function exFolder(p, e){
 
 async function exSave(card, say){
   const p = projects[current], key = card.dataset.exKey, e = exRead(card);
-  const folderNeeded = [...card.querySelectorAll('input[type="file"]')].some(i => i.files && i.files[0]);
+  const sel = card.querySelector('[name="s_person"]');
+  const fileOf = n => { const i = card.querySelector(`[name="${n}"]`); return i && i.files && i.files[0]; };
+  if(sel && (sel.value === "__new" || (e.personKey && (fileOf("np_id") || fileOf("np_cv"))))){
+    let pk = e.personKey, person;
+    if(sel.value === "__new"){
+      const g = n => (card.querySelector(`[name="${n}"]`) || {}).value || "";
+      const name = g("np_name").trim(); if(!name) throw {code:"tool_error", message:"أدخل اسم الشخص الجديد."};
+      if(Object.values(people).some(x => (x.name || "").replace(/\s+/g, " ") === name.replace(/\s+/g, " "))) throw {code:"tool_error", message:"هذا الاسم موجود في القائمة. اختره منها."};
+      pk = "new-" + Date.now().toString(36);
+      person = {name, nameEn: "", father: g("np_father").trim(), mother: g("np_mother").trim(), dob: g("np_dob"), nid: g("np_nid").trim(), gender: g("np_gender"), nationality: g("np_nat").trim(),
+        mobile: (e.f.sup || {}).mobile || "", address: (e.f.sup || {}).addr || "", idFileId: "", cvFileId: "", status: "pending", docs: []};
+      e.f.sup = {...(e.f.sup || {}), name};
+    } else person = {...people[pk]};
+    const safe = person.name.replace(/[\\/:*?"<>|]/g, " ").trim();
+    if(fileOf("np_id")){ say("جارٍ رفع الهوية…"); const r = await upload(fileOf("np_id"), FOLD.ids, `ID_${safe}`); if(person.idFileId) await trash(person.idFileId).catch(() => {}); person.idFileId = r.id; person.idFileName = r.title; person.status = "pending"; }
+    if(fileOf("np_cv")){ say("جارٍ رفع السيرة…"); const r = await upload(fileOf("np_cv"), FOLD.cvs, `CV_${safe}`); if(person.cvFileId) await trash(person.cvFileId).catch(() => {}); person.cvFileId = r.id; person.cvFileName = r.title; }
+    await db.doc("people/" + pk).set(person); people[pk] = person; e.personKey = pk;
+  }
+  const folderNeeded = [...card.querySelectorAll('input[type="file"]')].some(i => i.files && i.files[0] && !["np_id","np_cv"].includes(i.name));
   if(folderNeeded){
     const folder = await exFolder(p, e);
     for(const i of card.querySelectorAll('input[type="file"]')){
-      const file = i.files && i.files[0]; if(!file) continue;
+      const file = i.files && i.files[0]; if(!file || ["np_id","np_cv"].includes(i.name)) continue;
       const t = i.name === "att" ? i.dataset.type : i.name.replace("up_", "");
       say(`جارٍ رفع ${t}…`);
       const u = await upload(file, folder, `${t} - ${e.title || e.id}`);
       if(i.name === "att"){ e.att = e.att || {}; if(e.att[t]) await trash(e.att[t].id).catch(() => {}); e.att[t] = {id: u.id, name: file.name}; }
-      else { e.files = e.files || {}; const old = e.files[t]; if(old && old.id) await trash(old.id).catch(() => {}); e.files[t] = {id: u.id, at: today()}; }
+      else { e.files = e.files || {}; const old = e.files[t]; if(old && old.id) await trash(old.id).catch(() => {}); if(old && old.pdf) await trashSet(old).catch(() => {}); e.files[t] = {id: u.id, at: today(), signed: true}; }
     }
   }
   e.done = !!(e.files || {}).RCPT;
@@ -1879,9 +1917,9 @@ async function exGenerate(card, codes, say){
     say("جارٍ الحفظ…");
     const e = await exSave(card, say), key = card.dataset.exKey;
     const cat = exCat(p, e);
-    const list = (codes || exForms(cat)).filter(c => FORM_TPL[c] && !(c === "INV" && (e.f || {}).invSrc !== "system"));
+    const list = (codes || exForms(cat)).filter(c => (FORM_TPL[c] || c === "CONTRACT") && !(c === "INV" && (e.f || {}).invSrc !== "system"));
     if(list.includes("RCPT") && !(e.f || {}).rcptDate){ say("أدخل تاريخ الإيصال أولاً.", true); return; }
-    for(const c of list) await exGenForm(p, e, c, say);
+    for(const c of list){ if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); }
     e.done = !!(e.files || {}).RCPT;
     await db.doc("expenses/" + key).set(e);
     editing = false; exOpen.add(key); render(true);
@@ -1895,7 +1933,10 @@ async function exClick(t){
   if(a === "add"){
     const box = t.closest("#exAdd"), line = F(box, "exline").value, title = F(box, "extitle").value.trim();
     const id = Date.now().toString(36), key = p.code + "__" + id;
-    const e = {project: p.code, id, line: line === "__other" ? "" : line, cat: line === "__other" ? F(box, "excat").value : "", title, mode: "stage", month: tsMonth, created: today(), items: [], f: {}};
+    const pos = (p.positions || []).find(x => pid(x) === line) || {};
+    const e = {project: p.code, id, line: line === "__other" ? "" : line, cat: line === "__other" ? F(box, "excat").value : "", title: title || pos.purpose || pos.title || "", mode: "stage", month: tsMonth, created: today(),
+      items: pos.code ? [{d: pos.purpose || pos.title, u: pos.unitName || "", q: pos.count || "", dur: 1, p: pos.salary || "", sp: "", n: "", cm: ""}] : [],
+      f: {cDuties: (duties[pos.duties] || []).join("\n")}};
     try{ await db.doc("expenses/" + key).set(e); exOpen.add(key); editing = false; render(true); }catch(_){ say("تعذّرت الإضافة.", true); }
     return;
   }
@@ -1910,12 +1951,58 @@ async function exClick(t){
   }
 }
 
+async function loadDocxTpl(id){
+  if(xTpl["d:" + id]) return xTpl["d:" + id];
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: id});
+  const b64 = findB64(r, 0).replace(/\s/g, ""); if(!b64) throw {code:"tool_error", message:"تعذّرت قراءة قالب العقد."};
+  const zip = await JSZip.loadAsync(b64, {base64: true});
+  return xTpl["d:" + id] = {b64, xml: await zip.file("word/document.xml").async("string")};
+}
+async function exContract(p, e, say){
+  const v = exPerson(e), f = e.f || {}, pos = (p.positions || []).find(x => pid(x) === e.line) || {}, ex = p.expense || {};
+  const cur = ex.currency || (p.contract || {}).currency || "";
+  if(!v) throw {code:"tool_error", message:"اختر المتعاقد من قائمة الأشخاص أو أضفه."};
+  if(!v.gender) throw {code:"tool_error", message:"جنس المتعاقد غير مسجّل. أدخله أو اطلب من Claude قراءة الهوية."};
+  if(!f.cStart || !f.cEnd) throw {code:"tool_error", message:"أدخل بداية التنفيذ ونهايته."};
+  const dl = (f.cDuties || "").split("\n").map(x => x.trim()).filter(Boolean); if(!dl.length) throw {code:"tool_error", message:"أدخل مهام العقد."};
+  const rep = repFor(p, {code: "x", id: "x"}); if(!rep) throw {code:"tool_error", message:"سجّل مدير المشروع قبل عقود الخبراء."};
+  const it = (e.items || [])[0] || {}, qty = num(it.q), price = itemPrice(it), T = exTotals(e, true);
+  const gd = v.gender, nm = shortName(v), nat = v.nationality || gw(gd, "سوري", "سورية");
+  const title = gw(gd, pos.title_m, pos.title_f) || (pos.title || "خبير/ة").replace("/ة", gd === "f" ? "ة" : "");
+  const unit = it.u || pos.unitName || "يوم", plural = pos.unitPlural || unit;
+  const tags = {
+    P4: `من أجل تنفيذ الخطة الاستراتيجية لفريق سوريانا الأمل وبالاستناد على نظرية التغيير التي يعمل عليها الفريق والتي تعتمد على بناء قدرات النساء وتمكينهن وخلق مساحة داعمة وتقديم خدمات أفضل للوصول الى مشاركة فاعلة بعملية صنع واتخاذ القرار، يحتاج الفريق ل${title}${e.title ? " بهدف " + e.title : ""}${(p.contract || {}).label ? " ضمن " + p.contract.label : ""}`,
+    P5: `وبما أن ${gw(gd,"السيد","السيدة")} ${nm} ${gw(gd,"جنسيته","جنسيتها")} ${nat}، ${gw(gd,"والمشار إليه","والمشار إليها")} بالطرف الثاني في هذا العقد ${gw(gd,"لديه","لديها")} الخبرة اللازمة والمهارات والامكانيات للعمل ك${title} سيتم التعاقد ${gw(gd,"معه","معها")} من قبل فريق سوريانا الأمل والمشار إليه في هذا العقد بالطرف الأول ${gw(rep.gender,"والممثل عنه السيد","والممثلة عنه السيدة")} ${rep.name} ${gw(rep.gender,"بصفته","بصفتها")} ${rep.capacity}`,
+    SALARY: qty > 1 ? `يحدد الأجر بقيمة ${price.toLocaleString("en-US")} ${cur} عن كل ${unit}، لعدد ${qty} ${plural}، بإجمالي ${T.total.toLocaleString("en-US")} ${cur} (${words(T.total)} ${cur}) فقط لا غير، تُدفع بعد استلام المخرجات.`
+                    : `يحدد الأجر الإجمالي بقيمة ${T.total.toLocaleString("en-US")} ${cur} (${words(T.total)} ${cur}) فقط لا غير، تُدفع بعد استلام المخرجات.`,
+    PERIOD: `${qty ? qty + " " + plural + " " : ""}خلال الفترة من ${dmy(f.cStart)} حتى ${dmy(f.cEnd)}`,
+    P31: `يعي الطرفين بالحفاظ على المعلومات التي يقدمها كلاهما (وتحديداً الطرف الثاني)، ولا تعتبر متاحة للمشاركة إلا بكتاب وموافقة من الطرفين وبناءً على ما سبق تم التعاقد بين الطرفين بصورة منه وتم تحرير هذا العقد بصيغة واحدة وفقاً للبنود المذكورة بتاريخ ${dmy(f.cDate || f.cStart)}`,
+    SIG_A: rep.name, SIG_B: nm
+  };
+  say("جارٍ تجهيز العقد…");
+  const tpl = await loadDocxTpl(templates.expertContract || EXPERT_TPL);
+  const zip = await JSZip.loadAsync(tpl.b64, {base64: true});
+  zip.file("word/document.xml", fillXml(tpl.xml, {tags, duties: dl}));
+  const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const blob = await zip.generateAsync({type: "blob", mimeType: DOCX, compression: "DEFLATE", compressionOptions: {level: 9}});
+  const folder = await exFolder(p, e), base = `عقد${f.contractNo ? " " + f.contractNo : ""} - ${v.nameEn || nm} - ${e.title || e.id}`.replace(/[\\/:*?"<>|]/g, " ");
+  const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folder, base);
+  say("جارٍ تحويل العقد إلى PDF…");
+  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+  const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: DOCX, base64Content: b64});
+  const gid = payloadId(gr); let pdf = null;
+  try{ const exr = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"}); const p64 = findB64(exr, 0);
+    if(p64) pdf = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type: "application/pdf"}), folder, base); } finally { if(gid) await trash(gid); }
+  const old = (e.files || {}).CONTRACT; if(old){ for(const id of [old.id, old.pdf, old.xlsx, old.word]) if(id) await trash(id).catch(() => {}); }
+  e.files = e.files || {}; e.files.CONTRACT = {pdf: pdf ? pdf.id : "", word: w.id, at: today()};
+}
+
 /* أجزاء التوثيق لعملية صرف: من الأقدم إلى الأحدث ثم المرفقات */
 function exParts(p, e){
   const cat = exCat(p, e), files = e.files || {}, parts = [];
   for(const c of exForms(cat)){ const o = files[c]; if(!o) continue;
     [].concat(o).forEach((x, i, arr) => parts.push([(FORM_CODE[c] || c) + (arr.length > 1 ? " " + (i + 1) : ""), x.pdf || x.id || x.xlsx])); }
-  exAttach(cat).forEach(t => { const a = (e.att || {})[t]; if(a) parts.push([t, a.id]); });
+  exAttach(cat).forEach(t => { const id = attFile(e, t); if(id) parts.push([t, id]); });
   return parts.filter(x => x[1]);
 }
 
@@ -1947,6 +2034,14 @@ document.addEventListener("change", e => {
   if(e.target.closest("#exBox")){ editing = true;
     if(e.target.name === "exline") e.target.closest("#exAdd").querySelector(".exother").hidden = e.target.value !== "__other";
     const card = e.target.closest("[data-ex-key]");
+    if(card && e.target.name === "s_person"){
+      const pk = e.target.value, v = people[pk], isNew = pk === "__new";
+      card.querySelector(".newperson").hidden = !isNew;
+      card.querySelector(".pfiles").hidden = !(isNew || (v && (!v.idFileId || !v.cvFileId)));
+      if(v){ const pos = (projects[current].positions || []).find(x => pid(x) === (expenses[card.dataset.exKey] || {}).line) || {};
+        const set = (n, val) => { const i = card.querySelector(`[name="${n}"]`); if(i && val) i.value = val; };
+        set("s_name", v.name); set("s_mobile", v.mobile); set("s_addr", v.address); set("s_prof", gw(v.gender, pos.title_m, pos.title_f) || pos.title); }
+    }
     if(card && ["mode","invSrc","rfqMode"].includes(e.target.name)){ const k = card.dataset.exKey; expenses[k] = exRead(card); exOpen.add(k); card.outerHTML = exCard(projects[current], {key: k, ...expenses[k]}); }
   }
   if(e.target.closest("#actBox")){ editing = true; if(e.target.name === "ecat") catPick(); if(e.target.dataset.sg && e.target.name === "n") signerFill(e.target); }
