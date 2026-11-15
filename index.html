@@ -264,10 +264,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794752378";</script>
-<script src="config.js?v=1794752378"></script>
+<script>window.APP_VERSION = "1794752597";</script>
+<script src="config.js?v=1794752597"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794752378"></script>
+<script src="platform.js?v=1794752597"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2500,17 +2500,16 @@ function renderBudget(p){
   const box = $("#budgetBox"); if(!box) return;
   const ex = p.expense || {}, map = {...LINE_DEFAULT, ...(ex.lines || {})}, cats = ecfg().categories || [], mi = budgetMissing(p);
   const rows = (p.positions || []).map(x => { const st = isStaff(x), cnt = x.count || (st ? (p.contract || {}).months : "") || "";
-    return `<tr data-bl="${esc(pid(x))}"><td class="code">${esc(x.code)}</td><td>${esc(x.title)}</td>
+    return `<tr data-bl="${esc(pid(x))}"><td class="code">${esc(x.code)}${x.added ? `<br><button type="button" class="x" data-rmline="${esc(pid(x))}" title="بند أُضيف خارج الموازنة الأصلية">حذف</button>` : ""}</td><td>${esc(x.title)}${x.added ? '<br><span class="code">مضاف خارج الموازنة</span>' : ""}</td>
       <td><input name="ten" dir="ltr" value="${esc(x.titleEn || "")}" aria-label="الاسم بالإنجليزية" style="width:230px"></td>
       <td><input name="unit" value="${esc(x.unitName || "")}" style="width:90px" aria-label="الوحدة"></td>
       <td><input name="cnt" type="number" min="0" value="${esc(cnt)}" style="width:70px" aria-label="العدد"></td>
       <td><input name="price" type="number" min="0" value="${esc(x.salary || "")}" style="width:100px" aria-label="سعر الوحدة"></td>
       <td class="code">${(num(x.salary) * num(cnt)).toLocaleString("en-US")}</td>
-      <td>${x.added ? `<button type="button" class="x" data-rmline="${esc(pid(x))}" title="بند أُضيف خارج الموازنة الأصلية">حذف</button>` : ""}</td>
       <td>${st ? '<span class="code">موظف</span>' : `<select data-line="${esc(pid(x))}"><option value="">— الفئة —</option>${cats.map(c => `<option value="${esc(c.id)}" ${c.id === map[pid(x)] ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`}</td></tr>`; }).join("");
   box.innerHTML = `<details class="settings panel" open><summary><span>بنود الموازنة</span>${badge(mi)}</summary>
     <div class="phead"><span id="bl-msg" class="msg"></span><button type="button" data-bl-save="1">حفظ</button></div>
-    <div class="tscroll"><table class="ptab" style="min-width:980px"><thead><tr><th>البند</th><th>في الموازنة</th><th>بالإنجليزية (للتقرير)</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th></th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tscroll"><table class="ptab" style="min-width:980px"><thead><tr><th>البند</th><th>في الموازنة</th><th>بالإنجليزية (للتقرير)</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="code">الفئة تحدد النماذج والمستندات المطلوبة لكل مصروف. تُعرَّف الفئات في «الإعدادات العامة».</p>
   </details>`;
 }
