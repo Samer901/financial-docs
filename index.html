@@ -275,10 +275,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794766431";</script>
-<script src="config.js?v=1794766431"></script>
+<script>window.APP_VERSION = "1794767799";</script>
+<script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794766431"></script>
+<script src="platform.js?v=1794767799"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1224,6 +1224,24 @@ function setCell(xml, ref, val){
     return `<c r="${ref}"${sAttr} t="inlineStr"><is><t>${xmlEsc(val)}</t></is></c>`;
   });
 }
+/* مثل setCell لكن يُنشئ الخلية (والصف) إذا لم تكن موجودة */
+function putCell(xml, ref, val){
+  if(new RegExp(`<c r="${ref}"[ >/]`).test(xml)) return setCell(xml, ref, val);
+  if(val === null || val === undefined || val === "") return xml;
+  const [, col, row] = ref.match(/^([A-Z]+)(\d+)$/), cn = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  const cell = typeof val === "number" ? `<c r="${ref}"><v>${val}</v></c>` : `<c r="${ref}" t="inlineStr"><is><t>${xmlEsc(val)}</t></is></c>`;
+  const rm = xml.match(new RegExp(`<row r="${row}"[^>]*?(?:/>|>([\\s\\S]*?)</row>)`));
+  if(rm){
+    const inner = rm[1] || "", cells = [...inner.matchAll(/<c r="([A-Z]+)\d+"[\s\S]*?(?:\/>|<\/c>)/g)];
+    const after = cells.find(c => cn(c[1]) > cn(col));
+    const ninner = after ? inner.slice(0, after.index) + cell + inner.slice(after.index) : inner + cell;
+    const open = rm[0].replace(/\/?>[\s\S]*$/, "").replace(/\/$/, "");
+    return xml.replace(rm[0], `${open}>${ninner}</row>`);
+  }
+  const rows = [...xml.matchAll(/<row r="(\d+)"/g)], nxt = rows.find(m => +m[1] > +row);
+  const nr = `<row r="${row}">${cell}</row>`;
+  return nxt ? xml.slice(0, nxt.index) + nr + xml.slice(nxt.index) : xml.replace("</sheetData>", nr + "</sheetData>");
+}
 
 /* تكبير ارتفاع الصفوف لتملأ الصفحة عند التحويل */
 function stretchRows(xml, maxRow, f){
@@ -1799,7 +1817,7 @@ function missingInfo(p){
   const need = (cond, label, arr) => { if(!cond) arr.push(label); };
   const basics = [], contracts = [], docs = [], people_ = [], staffM = [];
   need(p.name, "اسم المشروع", basics); need(p.donor, "المانح", basics); need(p.start, "تاريخ البداية", basics); need(p.end, "تاريخ النهاية", basics);
-  need(c.currency, "العملة", basics); need(ex.orgEn, "اسم المنظمة بالإنجليزية", basics); need(num(ex.approvedEur), "المبلغ المعتمد باليورو", basics);
+  need(c.currency, "العملة", basics); need(ex.orgEn, "اسم المنظمة بالإنجليزية", basics); need(num(ex.approvedEur), "المبلغ المعتمد ب" + gcur(p)[0], basics);
   need(c.months, "عدد أشهر العقد", contracts); need(c.start, "بداية العقد", contracts); need(c.end, "نهاية العقد", contracts); need(c.date, "تاريخ تحرير العقود", contracts);
   staff.forEach(x => { if(!x.salary) staffM.push(`راتب البند ${x.code}`); if(!x.title_m || !x.title_f) staffM.push(`مسمى البند ${x.code} في العقد`); });
   need(pm.name, "موقّع عقد مدير المشروع", docs); need(s.pmPositionCode, "بند مدير المشروع", docs);
@@ -1829,7 +1847,7 @@ function renderBasics(p){
       ${f("pb-name", "اسم المشروع", p.name)}${f("pb-donor", "المانح", p.donor)}<div><label>رمز الاتفاقية</label><input value="${esc(p.code)}" disabled></div>
       ${f("pb-start", "تاريخ البداية", p.start, "date")}${f("pb-end", "تاريخ النهاية", p.end, "date")}${f("pb-cur", "العملة", c.currency)}
       ${f("pb-code", "رمز المشروع في النماذج", ex.projectCode, "", 'placeholder="يبقى فارغاً إن لم يوجد" dir="ltr"')}${f("pb-org", "اسم المنظمة بالإنجليزية", ex.orgEn, "", 'dir="ltr"')}${f("pb-office", "اسم المكتب", ex.office)}
-      ${f("pb-appr", "المبلغ المعتمد باليورو", ex.approvedEur, "number", 'step="any"')}${f("pb-recv", "المبالغ المستلمة (يورو)", ex.receivedEur, "number", 'step="any"')}
+      ${f("pb-appr", "المبلغ المعتمد ب" + gcur(p)[0], ex.approvedEur, "number", 'step="any"')}${f("pb-recv", `المبالغ المستلمة (${gcur(p)[1]})`, ex.receivedEur, "number", 'step="any"')}
     </div>
   </details>`;
 }
@@ -2524,6 +2542,10 @@ function exParts(p, e){
 
 /* ===== التقرير المالي للمانح (تراكمي) ===== */
 const REPORT_TPL = "1qsk1RpPRWvMzBpDokjRobDIWuIe_JrcA";
+/* عملة المنحة (عملة الموازنة الأساسية): GBP أو EUR… */
+const GCUR = {GBP: ["الجنيه الإسترليني", "جنيه"], EUR: ["اليورو", "يورو"], USD: ["الدولار", "دولار"]};
+const gcur = p => GCUR[((p && p.budget) || {}).grantCurrency || "EUR"] || [((p && p.budget) || {}).grantCurrency, ((p && p.budget) || {}).grantCurrency];
+const SEC_ROWS = {"1": 14, "2.1": 19, "2.2": 25, "3": 31};
 const SUM_ROWS = {"1.1":15,"1.2":16,"1.3":17,"1.4":18,"2.1.1":20,"2.1.2":21,"2.1.3":22,"2.1.4":23,"2.1.5":24,"2.2.1":26,"2.2.2":27,"2.2.3":28,"2.2.4":29,"2.2.5":30,"3.1":32,"3.2":33,"3.3":34,"3.4":35};
 const monthEnd = ym => { const [y, m] = ym.split("-").map(Number); return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 function projMonthList(p, upto){ const out = []; let [y, m] = (p.start || upto + "-01").slice(0, 7).split("-").map(Number);
@@ -2542,7 +2564,7 @@ function renderReport(p){
   box.innerHTML = `<details class="settings panel" open><summary><span>التقرير المالي للمانح — تراكمي حتى نهاية ${monLabel(rpMonth)}</span></summary>
     <div class="sgrid"><div><label>حتى نهاية شهر</label>${monthPick("rp", rpMonth)}</div></div>
     <p class="code">يُملأ سجل الصرف (Transactions1) والملخص من إيصالات الرواتب وإيصالات المصاريف حتى نهاية الشهر المختار. الوصف من أسماء البنود بالإنجليزية في الموازنة. طريقة الدفع: نقدي (C).</p>
-    <h3>سعر صرف اليورو لكل شهر (من InforEuro: كم ${esc(ex.currency || (p.contract || {}).currency || "ليرة")} لكل 1 يورو)</h3>
+    <h3>سعر صرف ${gcur(p)[0]} لكل شهر (من InforEuro: كم ${esc(ex.currency || (p.contract || {}).currency || "ليرة")} لكل 1 ${gcur(p)[1]})</h3>
     ${rateRows(rates, tx)}
     <p class="code">المبلغ المعتمد والمبالغ المستلمة واسم المنظمة تُعدَّل من تبويب «المشروع» ← البيانات الأساسية.</p>
     <p class="code">عدد الحركات: ${tx.length} · المجموع: ${tx.reduce((s, t) => s + t.amount, 0).toLocaleString("en-US")}${missing.length ? ` · <span class="review">ينقص سعر صرف: ${missing.map(monLabel).join("، ")}</span>` : ""}</p>
@@ -2596,7 +2618,7 @@ async function rpMake(say){
     const ex = await rpSave(), tx = txList(p, rpMonth);
     if(!tx.length){ say("لا توجد إيصالات حتى نهاية هذا الشهر.", true); return; }
     const missing = [...new Set(tx.map(t => t.month))].filter(m => !num((ex.eurRates || {})[m]));
-    if(missing.length){ say("أدخل سعر صرف اليورو للأشهر: " + missing.join("، "), true); return; }
+    if(missing.length){ say(`أدخل سعر صرف ${gcur(p)[0]} للأشهر: ` + missing.join("، "), true); return; }
     tx.forEach(t => t.eur = Math.round(t.amount / ex.eurRates[t.month] * 100) / 100);
     const totLocal = tx.reduce((s, t) => s + t.amount, 0), totEur = tx.reduce((s, t) => s + t.eur, 0), avg = totEur ? Math.round(totLocal / totEur * 100) / 100 : "";
     say("جارٍ تحميل القالب…");
@@ -2628,15 +2650,47 @@ async function rpMake(say){
     const end = monthEnd(rpMonth), lines = (p.positions || []), grand = lines.reduce((t, pos) => t + lineTotal(p, pos), 0);
     s = setCell(setCell(setCell(setCell(s, "E5", ex.orgEn || ""), "E7", p.name || p.code), "E9", `${dmy(p.start)} - ${dmy(end)}`), "E11", avg);
     const byLine = {}; tx.forEach(t => { byLine[t.line] = (byLine[t.line] || 0) + t.eur; });
+    const bd = p.budget || {}, bRate = num(bd.rate), bItems = bd.items || {}, bSec = bd.sections || {};
+    for(const [code, r] of Object.entries(SEC_ROWS)) if(bSec[code]) s = setCell(s, "D" + r, bSec[code]);
     for(const [code, r] of Object.entries(SUM_ROWS)){
       const pos = lines.find(x => x.code === code);
-      const appr = pos && num(ex.approvedEur) && grand ? Math.round(lineTotal(p, pos) / grand * num(ex.approvedEur) * 100) / 100 : null;
+      const appr = !pos ? null : bRate ? Math.round(lineTotal(p, pos) / bRate * 100) / 100 : (num(ex.approvedEur) && grand ? Math.round(lineTotal(p, pos) / grand * num(ex.approvedEur) * 100) / 100 : null);
       const spent = byLine[code] ? Math.round(byLine[code] * 100) / 100 : (pos ? 0 : null);
-      s = setCell(s, "D" + r, pos ? (pos.titleEn || pos.title) : "xxxxxx");
+      s = setCell(s, "D" + r, pos ? ((bItems[code] || {}).name || pos.titleEn || pos.title) : "");
       s = setCell(setCell(setCell(s, "E" + r, appr), "F" + r, spent), "H" + r, spent);
     }
     if(ex.receivedEur !== "" && ex.receivedEur !== undefined) s = setCell(s, "H37", num(ex.receivedEur));
     zip.file(fSum, s);
+    // ورقة الموازنة من الموازنة الأساسية
+    const fBud = sheetFile("BUDGET");
+    if(fBud && bRate){
+      let b = await zip.file(fBud).async("string");
+      b = putCell(putCell(putCell(putCell(b, "C4", bd.country || "Syria"), "C6", bd.org || ex.orgEn || ""), "C8", bd.period || ""), "C10", num(bd.requested) || "");
+      b = putCell(putCell(b, "D13", bRate), "F13", bd.currencyLocal || (p.contract || {}).currency || "");
+      const sstF = zip.file("xl/sharedStrings.xml"), sst = sstF ? [...(await sstF.async("string")).matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m => [...m[1].matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map(t => t[1]).join("")) : [];
+      const rowsOf = {}; [...b.matchAll(/<c r="A(\d+)"([^>]*?)(?<!\/)>([\s\S]*?)<\/c>/g)].forEach(m => { let v = "";
+        if(/t="s"/.test(m[2])){ const i = (m[3].match(/<v>(\d+)<\/v>/) || [])[1]; v = i !== undefined ? (sst[+i] || "") : ""; }
+        else { const t = m[3].match(/<t[^>]*>([^<]*)<\/t>|<v>([^<]*)<\/v>/) || []; v = t[1] || t[2] || ""; }
+        v = v.trim(); if(/^\d+(\.\d+)*$/.test(v)) rowsOf[v] = +m[1]; });
+      const secTot = {};
+      for(const [code, r] of Object.entries(rowsOf)){
+        if(bSec[code] !== undefined) continue;
+        const pos = lines.find(x => x.code === code), it = bItems[code] || {};
+        if(!pos){ for(const c of "BCDEFG") b = putCell(b, c + r, null); continue; }
+        const loc = lineTotal(p, pos), eur = Math.round(loc / bRate * 100) / 100, sec = Object.keys(bSec).filter(k => code.startsWith(k + ".")).sort((a, c) => c.length - a.length)[0];
+        if(sec){ secTot[sec] = secTot[sec] || [0, 0]; secTot[sec][0] += loc; secTot[sec][1] += eur; }
+        b = putCell(putCell(putCell(putCell(putCell(putCell(b, "B" + r, it.name || pos.titleEn || pos.title), "C" + r, num(pos.salary)), "D" + r, it.unit || pos.unitName || ""), "E" + r, num(pos.count) || 1), "F" + r, loc), "G" + r, eur);
+      }
+      let gl = 0, ge = 0;
+      for(const code of Object.keys(bSec)){ const r = rowsOf[code]; if(!r) continue; const [l, e2] = secTot[code] || [0, 0]; if(!code.includes(".") || !Object.keys(bSec).some(k => k !== code && k.startsWith(code + "."))){ gl += l; ge += e2; }
+        b = putCell(putCell(putCell(b, "B" + r, bSec[code]), "F" + r, l), "G" + r, Math.round(e2 * 100) / 100); }
+      const gi = sst.findIndex(t => /GRAND TOTAL/i.test(t));
+      const gr = (gi >= 0 && (b.match(new RegExp(`<c r="[A-Z]+(\\d+)"[^>]*t="s"[^>]*><v>${gi}<\/v>`)) || [])[1]) || (b.match(/<c r="[A-Z]+(\d+)"[^>]*>(?:(?!<\/c>)[\s\S])*GRAND TOTAL/) || [])[1];
+      if(bd.noteRate) b = putCell(b, "B13", bd.noteRate);
+      if(bd.headTotal) b = putCell(b, "G18", bd.headTotal);
+      if(gr){ b = putCell(putCell(b, "F" + gr, gl), "G" + gr, Math.round(ge * 100) / 100); }
+      zip.file(fBud, b);
+    }
     // إزالة سلسلة الحساب القديمة ليعيد البرنامج الحساب
     if(zip.file("xl/calcChain.xml")){ zip.remove("xl/calcChain.xml");
       zip.file("[Content_Types].xml", (await zip.file("[Content_Types].xml").async("string")).replace(/<Override[^>]*calcChain[^>]*\/>/, ""));
@@ -2718,7 +2772,7 @@ function todoItems(p){
   const stl = units.filter(x => (m === "all" || x.month === m) && isStale(x, df));
   if(stl.length) items.push({w: 1, t: `${stl.length} مستند تغيّرت ملفاته ويحتاج إعادة دمج`, tab: stl.some(x => x.key.startsWith("pay:")) ? "staff" : "exp"});
   const bad = docMismatch(p, units); if(bad.length) items.push({w: 1, t: `${bad.length} مستند يحتاج إعادة ترقيم`, tab: "docs"});
-  if(m !== "all" && units.some(x => x.month === m) && !num(((p.expense || {}).eurRates || {})[m])) items.push({w: 1, t: "سعر صرف اليورو لهذا الشهر غير مُدخل", tab: "rep"});
+  if(m !== "all" && units.some(x => x.month === m) && !num(((p.expense || {}).eurRates || {})[m])) items.push({w: 1, t: `سعر صرف ${gcur(p)[0]} لهذا الشهر غير مُدخل`, tab: "rep"});
   return items;
 }
 function todoCounts(p){ const c = {}; todoItems(p).filter(x => x.w).forEach(x => c[x.tab] = (c[x.tab] || 0) + 1); return c; }
