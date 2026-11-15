@@ -264,10 +264,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794750130";</script>
-<script src="config.js?v=1794750130"></script>
+<script>window.APP_VERSION = "1794752040";</script>
+<script src="config.js?v=1794752040"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794750130"></script>
+<script src="platform.js?v=1794752040"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1657,7 +1657,7 @@ function renderDuties(){
   box.innerHTML = `<details class="settings panel"><summary><span>مهام الوظائف والخبراء</span></summary>
     <div class="phead"><span id="duty-msg" class="msg"></span><button type="button" id="saveDuties">حفظ المهام</button></div>
     <p class="code">مهمة في كل سطر. تُستخدم في كل العقود التي تختار هذه المجموعة، في كل المشاريع.</p>
-    ${sets.map(k => `<div class="dset"><label>${esc(k)}</label><textarea data-set="${esc(k)}" rows="5">${esc((duties[k]||[]).join("\n"))}</textarea></div>`).join("")}
+    ${sets.map(k => `<div class="dset"><div class="row"><label style="margin:0">${esc(k)}</label><button type="button" class="x" data-delset="${esc(k)}">حذف المجموعة</button></div><textarea data-set="${esc(k)}" rows="5">${esc((duties[k]||[]).join("\n"))}</textarea></div>`).join("")}
     <h3>إضافة مجموعة مهام جديدة</h3>
     <div class="dset"><label for="newset">اسم المنصب</label><input id="newset" placeholder="مثال: مسؤول لوجستي"></div>
     <div class="dset"><label for="newsetd">المهام (مهمة في كل سطر)</label><textarea id="newsetd" rows="6"></textarea></div>
@@ -1704,6 +1704,16 @@ async function saveSettings(){
     start: $("#c-start").value.trim(), end: $("#c-end").value.trim(), date: $("#c-date").value.trim()};
   try{ await db.doc("projects/" + p.code).update({positions, contract}); editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }
   catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
+}
+
+async function deleteDutySet(btn){
+  const k = btn.dataset.delset, m = $("#duty-msg");
+  const used = Object.values(projects).flatMap(pr => (pr.positions || []).filter(x => x.duties === k).map(x => `${pr.code} ${x.code}`));
+  if(used.length){ m.className = "msg err"; m.textContent = `لا يمكن الحذف: المجموعة مستخدمة في البنود ${used.join("، ")}. غيّر مهام هذه البنود من خطوة «العقود» أولاً.`; return; }
+  if(!confirmClick(btn, "اضغط مرة أخرى للتأكيد")) return;
+  const sets = {...duties}; delete sets[k];
+  try{ await db.doc("config/duties").set({sets}); duties = sets; editing = false; render(true); const mm = $("#duty-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = `حُذفت مجموعة «${k}».`; } }
+  catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحذف."; }
 }
 
 async function saveDuties(){
@@ -2613,6 +2623,7 @@ document.addEventListener("click", e => {
   else if(t.dataset.savep !== undefined) savePerson(t);
   else if(t.dataset.newp !== undefined) addPerson(t);
   else if(t.id === "saveDuties" || t.dataset.addset) saveDuties();
+  else if(t.dataset.delset) deleteDutySet(t);
   else if(t.dataset.rmline) removeLine(t);
   else if(t.dataset.del) deleteDoc(t);
   else if(t.dataset.unassign) unassign(t);
