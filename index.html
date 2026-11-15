@@ -132,6 +132,50 @@ details.excard[open]{gap:12px}
 .mpick{flex-wrap:nowrap}
 .mpick select{width:auto;min-width:0}
 .inl input{max-width:240px}
+
+/* ===== نظام الواجهة الموحّد ===== */
+.wrap{max-width:1100px;gap:16px}
+.tabs{gap:2px;border-bottom:2px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;padding-top:6px}
+.tab{border:0;border-radius:6px 6px 0 0;padding:10px 16px;font-weight:600;color:var(--muted);margin-bottom:-2px;border-bottom:2px solid transparent}
+.tab[aria-selected="true"]{background:transparent;color:var(--accent);border-bottom-color:var(--accent)}
+.tab-gear{margin-inline-start:auto;font-weight:500}
+.tabpane{gap:14px}
+details.settings{padding:0;border-radius:10px;overflow:visible}
+details.settings > summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;font-size:16px;font-weight:600}
+details.settings > summary::-webkit-details-marker{display:none}
+details.settings > summary::before{content:"▾";color:var(--muted);font-size:14px;width:14px;flex:none}
+details.settings:not([open]) > summary::before{content:"◂"}
+details.settings > summary > span:first-of-type{flex:1}
+details.settings[open] > summary{border-bottom:1px solid var(--line)}
+details.settings > :not(summary){margin-inline:18px}
+details.settings > :last-child{margin-bottom:18px}
+details.settings > summary + *{margin-top:14px}
+.phead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+.phead .msg{margin-inline-end:auto}
+.phead .mpick{margin-inline-end:auto}
+.phead .mpick + .msg{margin-inline-end:0}
+.settings h3{font-size:14px;font-weight:600;color:var(--ink);margin:22px 0 8px}
+.sgrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px 14px;margin:10px 0}
+.sgrid > div{display:flex;flex-direction:column;min-width:0}
+.sgrid input,.sgrid select,.ptab input,.ptab select,.dset textarea,.dset input,.alg input,.alg select{min-height:38px;background:var(--surface);border-radius:8px;padding:7px 10px}
+.sgrid select,.alg select{min-width:0}
+.sgrid input:disabled{background:var(--bg);color:var(--muted)}
+label{font-size:13px}
+.badge{font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);white-space:nowrap}
+.badge.ok{background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok)}
+.missbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--warn);border-radius:10px;padding:12px 16px}
+.missbar.ok{border-inline-start-color:var(--ok)}
+.missbar strong{margin-inline-end:8px}
+.chipbtn{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-weight:500;font-size:13px}
+.chipbtn:hover{border-color:var(--warn)}
+.panel{scroll-margin-top:60px}
+.group h2{scroll-margin-top:60px;display:flex;gap:10px;align-items:center;color:var(--ink)}
+.bar{z-index:4;position:static;border-top:0;padding:4px 0}
+.ptab td,.ptab th{padding:8px 6px}
+.code{line-height:1.5}
+p.code{margin:6px 0}
+fieldset.exs{background:var(--bg);border-color:transparent}
+details.excard{border-radius:10px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -140,7 +184,7 @@ details.excard[open]{gap:12px}
   <header>
     <div>
       <h1>التوثيقات المالية <span id="syncStatus" class="code"></span></h1>
-      <p class="sub">البيانات الثابتة: الأشخاص والكادر والعقود. التوثيقات الشهرية: جداول الدوام والرواتب وتجميع ملفات التوثيق بزر واحد.</p>
+      <p class="sub">إعداد المشروع مرة واحدة، ثم العمل الشهري للموظفين والمصاريف، ثم التقارير.</p>
     </div>
     <div>
       <label for="project">المشروع</label>
@@ -148,27 +192,39 @@ details.excard[open]{gap:12px}
     </div>
   </header>
   <nav class="tabs" role="tablist">
-    <button type="button" role="tab" class="tab" data-tab="fixed" aria-selected="true">البيانات الثابتة والعقود</button>
-    <button type="button" role="tab" class="tab" data-tab="monthly" aria-selected="false">التوثيقات الشهرية</button>
-    <button type="button" role="tab" class="tab" data-tab="acts" aria-selected="false">أنشطة المشروع</button>
+    <button type="button" role="tab" class="tab" data-tab="project" aria-selected="true">المشروع</button>
+    <button type="button" role="tab" class="tab" data-tab="staff" aria-selected="false">الموظفون شهرياً</button>
+    <button type="button" role="tab" class="tab" data-tab="exp" aria-selected="false">المصاريف</button>
+    <button type="button" role="tab" class="tab" data-tab="rep" aria-selected="false">التقارير المالية</button>
+    <button type="button" role="tab" class="tab tab-gear" data-tab="global" aria-selected="false" title="الإعدادات العامة لكل المشاريع">⚙ الإعدادات العامة</button>
   </nav>
   <div id="errbox" class="notice err" hidden></div>
   <div id="notice" class="notice" hidden></div>
-  <section id="tab-fixed" class="tabpane">
+  <section id="tab-project" class="tabpane">
+    <div id="missBar"></div>
+    <div id="projBasics"></div>
     <div id="settings"></div>
+    <div id="projDocs"></div>
     <div id="peopleBox"></div>
-    <div id="content"><p class="empty">جارٍ التحميل…</p></div>
-    <div class="bar"><span id="allmsg" class="msg" aria-live="polite"></span><button type="button" id="saveAll">حفظ الكل</button></div>
+    <section class="panel" id="staffPanel"><div id="content"><p class="empty">جارٍ التحميل…</p></div></section>
+    <div class="bar"><span id="allmsg" class="msg" aria-live="polite"></span><button type="button" id="saveAll">حفظ بطاقات الموظفين</button></div>
   </section>
-  <section id="tab-monthly" class="tabpane" hidden>
+  <section id="tab-staff" class="tabpane" hidden>
     <div id="tsBox"></div>
     <div id="prBox"></div>
-    <div id="exBox"></div>
-    <div id="repBox"></div>
-    <div id="docBox"></div>
+    <div id="docBoxPay"></div>
   </section>
-  <section id="tab-acts" class="tabpane" hidden>
+  <section id="tab-exp" class="tabpane" hidden>
+    <div id="exBox"></div>
+    <div id="docBoxEx"></div>
+  </section>
+  <section id="tab-rep" class="tabpane" hidden>
+    <div id="repBox"></div>
+    <div id="docList"></div>
+  </section>
+  <section id="tab-global" class="tabpane" hidden>
     <div id="actBox"></div>
+    <div id="dutiesBox"></div>
   </section>
 </div>
 <script>window.APP_VERSION = "1794747831";</script>
@@ -187,7 +243,8 @@ let projects = {}, assignments = {}, people = {}, current = "", saving = false, 
 const extraSlots = {};
 let duties = {}, templates = {}, tplCache = null, excelCfg = {}, editPerson = "";
 const curYM = new Date().toISOString().slice(0, 7);
-let prMonth = curYM, exMonth = curYM, rpMonth = curYM, docMonth = curYM;
+let prMonth = curYM, exMonth = curYM, rpMonth = curYM, docMonth = curYM, docMonthPay = curYM, docMonthEx = curYM, curDocKind = "pay";
+const docMsg = () => $("#doc-msg-" + curDocKind);
 let holidays = [], timesheets = {}, tsMonth = curYM, tsTpl = null, payrolls = {}, xTpl = {};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -213,6 +270,8 @@ const STATUS = {
 function render(force){
   if(saving || (editing && !force)){ dirty = true; if(editing && !saving) notice("وصلت تحديثات جديدة. ستظهر بعد الحفظ."); return; }
   editing = false; dirty = false;
+  const openIds = [...document.querySelectorAll("details.panel[id][open]")].map(d => d.id);
+  setTimeout(() => openIds.forEach(id => { const d = document.getElementById(id); if(d) d.open = true; }));
   const sel = $("#project");
   const codes = Object.keys(projects).sort();
   if(!codes.length){
@@ -225,18 +284,20 @@ function render(force){
   const p = projects[current];
   const staffPos = (p.positions || []).filter(isStaff);
   const cards = staffPos.flatMap(pos => slotKeys(p, pos).map((k, i, arr) => card(p, pos, k, i, arr.length)));
-  $("#content").innerHTML = `<section class="group"><h2>الموظفون</h2>
+  $("#content").innerHTML = `<section class="group"><h2 id="sec-staff">الموظفون وعقودهم ${badge(missingInfo(p).staff)}</h2>
     ${cards.length ? `<div class="grid">${cards.join("")}</div>` : '<p class="empty">لم يُضف موظفون بعد.</p>'}
     ${addStaffForm(p, staffPos)}</section>`;
   document.querySelectorAll(".card").forEach(syncCard);
+  renderBasics(p);
   renderSettings(p);
   renderPeople();
   renderTimesheets(p);
   renderPayroll(p);
   renderExpenses(p);
   renderReport(p);
-  renderDocs(p);
-  renderActs(p);
+  renderDocs(p, "pay"); renderDocs(p, "ex"); renderDocList(p);
+  renderActs(p); renderDuties();
+  renderMissing(p);
 }
 
 function nextCode(list, all){
@@ -848,7 +909,8 @@ function renderPeople(){
     <td><button type="button" class="ghost" data-editp="${esc(k)}">تعديل</button></td></tr>
     ${editPerson===k ? `<tr><td colspan="5">${personForm(k, v)}</td></tr>` : ""}`).join("");
   const xl = excelCfg.fileId ? dlink(excelCfg.fileId, "ملف Excel الحالي") + (excelCfg.updatedAt ? ` <span class="code">(آخر تحديث ${esc(excelCfg.updatedAt)})</span>` : "") : "";
-  box.innerHTML = `<details class="settings" ${open || editPerson ? "open" : ""}><summary>الأشخاص وبيانات الهويات (${list.length})</summary>
+  const pm_ = projects[current] ? missingInfo(projects[current]).people : [];
+  box.innerHTML = `<details class="settings panel" id="sec-people" ${open || editPerson ? "open" : ""}><summary><span>الأشخاص وبيانات الهويات (${list.length})</span>${badge(pm_)}</summary>
     <div class="row" style="margin:10px 0"><span class="current">${xl}</span><span><span id="xl-msg" class="msg"></span> <button type="button" id="exportXl">تحديث ملف Excel</button></span></div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>الاسم</th><th>بالإنجليزية</th><th>الرقم الشخصي</th><th>الحالة</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <details class="addline" id="newPerson" style="margin-top:10px"><summary>+ شخص جديد</summary>
@@ -1005,7 +1067,7 @@ function renderTimesheets(p){
   const rows = staffOf(p).map(({pos, v, id}) => `<tr data-tsid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
      <td>${dayGrid("lv-" + id, y, m, cfg.weekend, leave[id] || [], hol)}</td>
      <td>${files[id] ? dlink(files[id].pdf || files[id].xlsx, "PDF") + (files[id].xlsx ? " · " + dlink(files[id].xlsx, "Excel") : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("");
-  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>جداول الدوام الشهرية — ${monLabel(tsMonth)}</summary>
+  box.innerHTML = `<details class="settings panel" ${open || !box.innerHTML ? "open" : ""}><summary><span>جداول الدوام الشهرية — ${monLabel(tsMonth)}</span></summary>
     <div class="sgrid">
       <div><label>الشهر</label>${monthPick("ts", tsMonth)}</div>
       <div><label>ساعات العمل اليومية</label><input id="ts-hours" type="number" min="1" max="12" value="${esc(cfg.hours)}"></div>
@@ -1142,7 +1204,7 @@ function renderPayroll(p){
       <td><input name="loan" type="number" min="0" value="${esc(d.loan||"")}" aria-label="قرض"></td>
       <td><input name="pnote" value="${esc(d.notes||"")}" aria-label="ملاحظات"></td>
       <td>${link((f.vouchers||{})[id], "الإيصال") || '<span class="code">—</span>'}</td></tr>`; }).join("");
-  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>الرواتب الشهرية — ${MON_AR[+prMonth.slice(5)-1]} ${prMonth.slice(0,4)}</summary>
+  box.innerHTML = `<details class="settings panel" ${open || !box.innerHTML ? "open" : ""}><summary><span>الرواتب الشهرية — ${monLabel(prMonth)}</span></summary>
     <div class="sgrid"><div><label>الشهر</label>${monthPick("pr", prMonth)}</div></div><p class="code">الإجازات في الإيصال تُؤخذ من جدول دوام الشهر نفسه.</p>
     <div class="sgrid">
       <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
@@ -1269,14 +1331,14 @@ function idb(){ return new Promise((res, rej) => { try{ const r = indexedDB.open
 async function kvGet(k){ try{ const d = await idb(); return await new Promise(res => { const q = d.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); }catch(e){ return null; } }
 async function kvSet(k, v){ try{ const d = await idb(); await new Promise(res => { const t = d.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = res; }); }catch(e){} }
 const canPickDir = () => typeof window.showDirectoryPicker === "function";
-async function loadDir(){ if(!canPickDir()) return; dirHandle = await kvGet("dir"); renderDocs(projects[current]); }
+async function loadDir(){ if(!canPickDir()) return; dirHandle = await kvGet("dir"); if(projects[current]) render(true); }
 async function dirPerm(ask){
   if(!dirHandle) return false;
   try{ const o = {mode: "readwrite"}; if(await dirHandle.queryPermission(o) === "granted") return true; return ask ? (await dirHandle.requestPermission(o)) === "granted" : false; }catch(e){ return false; }
 }
 async function pickDir(){
-  const m = $("#doc-msg");
-  try{ dirHandle = await window.showDirectoryPicker({mode: "readwrite", id: "kadr-docs"}); await kvSet("dir", dirHandle); m.className = "msg ok"; m.textContent = "تم تحديد المجلد: " + dirHandle.name; renderDocs(projects[current]); }
+  const m = docMsg() || $("#notice");
+  try{ dirHandle = await window.showDirectoryPicker({mode: "readwrite", id: "kadr-docs"}); await kvSet("dir", dirHandle); m.className = "msg ok"; m.textContent = "تم تحديد المجلد: " + dirHandle.name; render(true); }
   catch(e){ if(e && e.name === "AbortError") return; m.className = "msg err"; m.textContent = "اختيار المجلد ممنوع في هذا العرض. افتح الصفحة في تبويب مستقل في Chrome أو Edge وجرّب مرة أخرى."; }
 }
 async function writeToDir(sub, name, blob){
@@ -1403,19 +1465,29 @@ function receiptUnits(p){
 }
 const docMismatch = (p, units) => { const map = Object.fromEntries(units.map(x => [x.key, x.n])); return Object.entries(p.docFiles || {}).filter(([k, o]) => map[k] && map[k] !== o.n); };
 
-function renderDocs(p){
-  const box = $("#docBox"); if(!box) return;
-  const st = docState[p.code + "__" + docMonth] || {}, units = receiptUnits(p), mine = units.filter(x => docMonth === "all" || x.month === docMonth), bad = docMismatch(p, units), df = p.docFiles || {};
-  box.innerHTML = `<div class="settings" style="display:grid;gap:10px">
-    <div class="row"><strong>توثيقات ${monLabel(docMonth)}</strong>${monthPick("doc", docMonth, true)}</div>
-    <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال، من الأقدم)، وهو نفسه Item number في التقرير المالي. يُحفظ في الدرايف (مجلد ${DOC_ROOT}) ونسخة في مجلد الكمبيوتر داخل مجلد باسم المشروع.</p>
-    ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>التاريخ</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
-      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذا الشهر.</p>'}
-    ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم بسبب إضافة إيصال أقدم. اضغط «إعادة الترقيم» قبل إنشاء توثيقات جديدة.</p>` : ""}
-    <div class="row"><span class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر — تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح — تُستخدم التنزيلات العادية.")}</span>${canPickDir() ? `<button type="button" class="ghost" id="pickDir">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
+function renderDocs(p, kind){
+  const box = $(kind === "pay" ? "#docBoxPay" : "#docBoxEx"); if(!box) return;
+  const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
+  const st = docState[p.code + "__" + kind + month] || {}, units = receiptUnits(p), mine = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month)), bad = docMismatch(p, units), df = p.docFiles || {};
+  box.innerHTML = `<details class="settings panel" open><summary><span>دمج مستندات ${kind === "pay" ? "الموظفين" : "المصاريف"} — ${monLabel(month)}</span></summary>
+    <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}">دمج المستندات</button></div>
+    <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
+    ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
+    ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم. أعد الترقيم من تبويب «التقارير المالية» قبل الدمج.</p>` : ""}
+    <div class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر، تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح، تُستخدم التنزيلات العادية.")} ${canPickDir() ? `<button type="button" class="ghost" data-pickdir="${kind}">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
-    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button> <button type="button" id="monthAll">إنشاء التوثيقات</button></span></div>
-  </div>`;
+  </details>`;
+}
+function renderDocList(p){
+  const box = $("#docList"); if(!box) return;
+  const units = receiptUnits(p), bad = docMismatch(p, units), df = p.docFiles || {};
+  box.innerHTML = `<details class="settings panel" ${bad.length ? "open" : ""}><summary><span>كل المستندات المرقّمة (${units.length})</span>${bad.length ? `<span class="badge">يحتاج إعادة ترقيم ${bad.length}</span>` : ""}</summary>
+    <div class="phead"><span class="msg" id="doc-msg-list" aria-live="polite"></span><button type="button" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button></div>
+    <p class="code">إذا أُضيف إيصال أقدم من مستندات محفوظة، تتغير أرقامها. إعادة الترقيم تعيد تسمية ملفاتها في الدرايف والكمبيوتر.</p>
+    ${units.length ? `<div class="tscroll"><table class="ptab" style="min-width:520px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>البند</th><th>المستند</th><th>المبلغ</th><th>الملف</th></tr></thead><tbody>
+      ${units.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td class="code">${esc(x.line)}</td><td>${esc(x.label)}</td><td class="code">${x.amount.toLocaleString("en-US")}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">رقم قديم</span>' : "") : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع بعد.</p>'}
+  </details>`;
 }
 
 async function renameLocal(sub, from, to){
@@ -1440,12 +1512,14 @@ async function renumberDocs(say){
     }
     await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
     editing = false; render(true);
-    const m = $("#doc-msg"); if(m){ m.className = "msg ok"; m.textContent = `تمت إعادة ترقيم ${bad.length} مستند${local ? " في الدرايف والكمبيوتر" : " في الدرايف (لم يُحدد مجلد على الكمبيوتر)"}.`; }
+    const m = $("#doc-msg-list"); if(m){ m.className = "msg ok"; m.textContent = `تمت إعادة ترقيم ${bad.length} مستند${local ? " في الدرايف والكمبيوتر" : " في الدرايف (لم يُحدد مجلد على الكمبيوتر)"}.`; }
   }catch(e){ await db.doc("projects/" + p.code).update({docFiles}).catch(() => {}); say(mcpMessage(e), true); }
 }
 
-async function buildDocs(say){
-  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => docMonth === "all" || x.month === docMonth);
+async function buildDocs(say, kind){
+  const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
+  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month));
+  if(!mine.length) throw {code: "tool_error", message: "لا توجد إيصالات دفع في هذه الفترة."};
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» أولاً."};
   const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
@@ -1471,22 +1545,85 @@ async function buildDocs(say){
     out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
   }
   await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
-  docState[p.code + "__" + docMonth] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
-  renderDocs(p);
+  docState[p.code + "__" + kind + month] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
+  renderDocs(p, kind);
 }
 
 const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/folders/${esc(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 
 async function monthAll(btn){
   if(dirHandle) await dirPerm(true);
-  const say = (t, err) => { const m = $("#doc-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("التوثيقات: " + t, true); };
+  curDocKind = btn.dataset.docmake;
+  const say = (t, err) => { const m = docMsg(); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("الدمج: " + t, true); };
   btn.disabled = true; editing = true;
-  try{ await buildDocs(say); say("تم إنشاء التوثيقات."); }
+  try{ await buildDocs(say, curDocKind); say("تم دمج المستندات."); }
   catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
   btn.disabled = false; editing = false;
 }
 
 /* ===== الإعدادات ===== */
+/* ===== اكتمال البيانات ===== */
+const badge = list => list && list.length ? `<span class="badge" title="${esc(list.join("\n"))}">ناقص ${list.length}</span>` : `<span class="badge ok">مكتمل</span>`;
+function missingInfo(p){
+  const c = p.contract || {}, ex = p.expense || {}, sg = ex.signers || {}, s = p.signatories || {}, pm = s.pmHiredBy || {}, staff = (p.positions || []).filter(isStaff);
+  const need = (cond, label, arr) => { if(!cond) arr.push(label); };
+  const basics = [], contracts = [], docs = [], people_ = [], staffM = [];
+  need(p.name, "اسم المشروع", basics); need(p.donor, "المانح", basics); need(p.start, "تاريخ البداية", basics); need(p.end, "تاريخ النهاية", basics);
+  need(c.currency, "العملة", basics); need(ex.orgEn, "اسم المنظمة بالإنجليزية", basics); need(num(ex.approvedEur), "المبلغ المعتمد باليورو", basics);
+  need(c.months, "عدد أشهر العقد", contracts); need(c.start, "بداية العقد", contracts); need(c.end, "نهاية العقد", contracts); need(c.date, "تاريخ تحرير العقود", contracts);
+  staff.forEach(x => { if(!x.salary) contracts.push(`راتب البند ${x.code}`); if(!x.title_m || !x.title_f) contracts.push(`مسمى البند ${x.code}`); if(!x.duties) contracts.push(`مهام البند ${x.code}`); });
+  need(pm.name, "موقّع عقد مدير المشروع", docs); need(s.pmPositionCode, "بند مدير المشروع", docs);
+  SIGNERS.forEach(([k, l]) => need((sg[k] || {}).name, "الموقّع: " + l, docs));
+  const map = {...LINE_DEFAULT, ...(ex.lines || {})};
+  (p.positions || []).filter(x => !isStaff(x)).forEach(x => { if(!map[pid(x)]) docs.push(`فئة البند ${x.code}`); });
+  Object.values(people).forEach(v => { if(v.review) people_.push(`مراجعة: ${v.name}`); else if(v.status !== "read") people_.push(`التحقق من هوية: ${v.name}`); });
+  staff.forEach(x => { const keys = Object.keys(assignments).filter(k => k === p.code + "__" + pid(x) || k.startsWith(p.code + "__" + pid(x) + "__"));
+    const a = keys.map(k => assignments[k]).find(a => a.personKey);
+    if(!a) staffM.push(`لا يوجد موظف للبند ${x.code}`); else { const cd = contractDoc(a); if(!cd) staffM.push(`عقد البند ${x.code} لم يُنشأ`); else if(!cd.fileId) staffM.push(`عقد البند ${x.code} بانتظار تحويله إلى PDF`); } });
+  return {basics, contracts, docs, people: people_, staff: staffM};
+}
+function renderMissing(p){
+  const box = $("#missBar"); if(!box || !p) return;
+  const m = missingInfo(p), parts = [["sec-basics","البيانات الأساسية",m.basics],["sec-contracts","العقود",m.contracts],["sec-docs","إعداد التوثيقات",m.docs],["sec-people","الأشخاص",m.people],["sec-staff","الموظفون",m.staff]];
+  const total = parts.reduce((t, x) => t + x[2].length, 0);
+  box.innerHTML = total ? `<div class="missbar"><strong>${total} خانة ناقصة في إعداد المشروع</strong>${parts.filter(x => x[2].length).map(([id, l, a]) => `<button type="button" class="chipbtn" data-goto="${id}">${l}: ${a.length}</button>`).join("")}</div>`
+    : `<div class="missbar ok"><strong>إعداد المشروع مكتمل</strong></div>`;
+}
+function renderBasics(p){
+  const box = $("#projBasics"); if(!box) return;
+  if(!p){ box.innerHTML = ""; return; }
+  const c = p.contract || {}, ex = p.expense || {}, mi = missingInfo(p).basics;
+  const f = (id, l, v, t, x) => `<div><label for="${id}">${l}</label><input id="${id}" ${t ? `type="${t}"` : ""} value="${esc(v ?? "")}" ${x || ""}></div>`;
+  box.innerHTML = `<details class="settings panel" id="sec-basics" ${mi.length ? "open" : ""}><summary><span>البيانات الأساسية</span>${badge(mi)}</summary>
+    <div class="phead"><span id="pb-msg" class="msg"></span><button type="button" data-pb="save">حفظ</button></div>
+    <div class="sgrid">
+      ${f("pb-name", "اسم المشروع", p.name)}${f("pb-donor", "المانح", p.donor)}<div><label>رمز الاتفاقية</label><input value="${esc(p.code)}" disabled></div>
+      ${f("pb-start", "تاريخ البداية", p.start, "date")}${f("pb-end", "تاريخ النهاية", p.end, "date")}${f("pb-cur", "العملة", c.currency)}
+      ${f("pb-code", "رمز المشروع في النماذج", ex.projectCode, "", 'placeholder="يبقى فارغاً إن لم يوجد" dir="ltr"')}${f("pb-org", "اسم المنظمة بالإنجليزية", ex.orgEn, "", 'dir="ltr"')}${f("pb-office", "اسم المكتب", ex.office)}
+      ${f("pb-appr", "المبلغ المعتمد باليورو", ex.approvedEur, "number", 'step="any"')}${f("pb-recv", "المبالغ المستلمة (يورو)", ex.receivedEur, "number", 'step="any"')}
+    </div>
+  </details>`;
+}
+async function saveBasics(){
+  const p = projects[current], m = $("#pb-msg"), v = id => $("#" + id).value.trim(), n = id => v(id) === "" ? "" : Number(v(id));
+  try{
+    await db.doc("projects/" + p.code).update({name: v("pb-name"), donor: v("pb-donor"), start: v("pb-start"), end: v("pb-end"),
+      contract: {...(p.contract || {}), currency: v("pb-cur")},
+      expense: {...(p.expense || {}), projectCode: v("pb-code"), orgEn: v("pb-org"), office: v("pb-office"), approvedEur: n("pb-appr"), receivedEur: n("pb-recv")}});
+    editing = false; render(true); const mm = $("#pb-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; }
+  }catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
+}
+function renderDuties(){
+  const box = $("#dutiesBox"); if(!box) return;
+  const sets = Object.keys(duties);
+  box.innerHTML = `<details class="settings panel"><summary><span>مهام الوظائف والخبراء</span></summary>
+    <div class="phead"><span id="duty-msg" class="msg"></span><button type="button" id="saveDuties">حفظ المهام</button></div>
+    <p class="code">مهمة في كل سطر. تُستخدم في كل العقود التي تختار هذه المجموعة، في كل المشاريع.</p>
+    ${sets.map(k => `<div class="dset"><label>${esc(k)}</label><textarea data-set="${esc(k)}" rows="5">${esc((duties[k]||[]).join("\n"))}</textarea></div>`).join("")}
+    <div class="dset"><label>إضافة مجموعة مهام جديدة</label><input id="newset" placeholder="اسم المنصب"></div>
+  </details>`;
+}
+
 function renderSettings(p){
   const box = $("#settings"); if(!p){ box.innerHTML = ""; return; }
   const c = p.contract || {}, s = p.signatories || {}, pm = s.pmHiredBy || {};
@@ -1498,28 +1635,18 @@ function renderSettings(p){
       <td><input name="tf" value="${esc(pos.title_f||"")}" aria-label="المسمى للمؤنث"></td>
       <td><input name="sal" type="number" min="0" value="${esc(pos.salary||"")}" aria-label="الراتب"></td>
       <td><select name="dt" aria-label="مهام المنصب">${setOpts(pos.duties)}</select></td></tr>`).join("");
-  const dutyEd = sets.map(k => `<div class="dset"><label>${esc(k)}</label><textarea data-set="${esc(k)}" rows="5">${esc((duties[k]||[]).join("\n"))}</textarea></div>`).join("");
-  box.innerHTML = `<details class="settings"><summary>إعدادات العقود لمشروع ${esc(p.code)}</summary>
+  const mi = missingInfo(p).contracts;
+  box.innerHTML = `<details class="settings panel" id="sec-contracts" ${mi.length ? "open" : ""}><summary><span>العقود وبنود الموظفين</span>${badge(mi)}</summary>
+    <div class="phead"><span id="set-msg" class="msg"></span><button type="button" id="saveSettings">حفظ</button></div>
     <div class="sgrid">
-      <div><label>اسم المشروع في العقد</label><input id="c-label" value="${esc(c.label||"")}" placeholder="اتركه فارغاً إن لم يوجد"></div>
-      <div><label>العملة</label><input id="c-cur" value="${esc(c.currency||"")}"></div>
-      <div><label>عدد الأشهر</label><input id="c-months" type="number" min="1" max="36" value="${esc(c.months||"")}"></div>
-      <div><label>من تاريخ</label><input id="c-start" value="${esc(c.start||"")}" placeholder="1-5-2026"></div>
-      <div><label>حتى تاريخ</label><input id="c-end" value="${esc(c.end||"")}" placeholder="1-11-2026"></div>
-      <div><label>تاريخ تحرير العقد</label><input id="c-date" value="${esc(c.date||"")}"></div>
-      <div><label>يوقّع عقد مدير المشروع</label><input id="s-name" value="${esc(pm.name||"")}"></div>
-      <div><label>صفته</label><input id="s-cap" value="${esc(pm.capacity||"")}"></div>
-      <div><label>الجنس</label><select id="s-g"><option value="f" ${pm.gender==="f"?"selected":""}>أنثى</option><option value="m" ${pm.gender==="m"?"selected":""}>ذكر</option></select></div>
-      <div><label>بند مدير المشروع</label><select id="s-pm">${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===s.pmPositionCode?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+      <div><label>اسم المشروع كما يُكتب في العقد</label><input id="c-label" value="${esc(c.label||"")}" placeholder="اتركه فارغاً إن لم يوجد"></div>
+      <div><label>عدد أشهر العقد</label><input id="c-months" type="number" min="1" max="36" value="${esc(c.months||"")}"></div>
+      <div><label>بداية العقد (كما تُكتب)</label><input id="c-start" value="${esc(c.start||"")}" placeholder="1-5-2026"></div>
+      <div><label>نهاية العقد (كما تُكتب)</label><input id="c-end" value="${esc(c.end||"")}" placeholder="1-11-2026"></div>
+      <div><label>تاريخ تحرير العقود</label><input id="c-date" value="${esc(c.date||"")}"></div>
     </div>
+    <h3>بنود الموظفين</h3>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>في الموازنة</th><th>المسمى (مذكر)</th><th>المسمى (مؤنث)</th><th>الراتب الشهري</th><th>المهام</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="row"><span id="set-msg" class="msg"></span><button type="button" id="saveSettings">حفظ الإعدادات</button></div>
-    <details class="duties"><summary>مهام الوظائف (لكل المشاريع)</summary>
-      <p class="code">مهمة في كل سطر. تُستخدم في كل العقود التي تختار هذه المهام.</p>
-      ${dutyEd}
-      <div class="dset"><label>إضافة مجموعة مهام جديدة</label><input id="newset" placeholder="اسم المنصب"></div>
-      <div class="row"><span id="duty-msg" class="msg"></span><button type="button" id="saveDuties">حفظ المهام</button></div>
-    </details>
   </details>`;
 }
 
@@ -1532,11 +1659,9 @@ async function saveSettings(){
     const sal = q("sal"); o.salary = sal ? Number(sal) : "";
     return o;
   });
-  const contract = {label: $("#c-label").value.trim(), currency: $("#c-cur").value.trim(), months: Number($("#c-months").value) || "",
+  const contract = {...(p.contract || {}), label: $("#c-label").value.trim(), months: Number($("#c-months").value) || "",
     start: $("#c-start").value.trim(), end: $("#c-end").value.trim(), date: $("#c-date").value.trim()};
-  const signatories = {...(p.signatories || {}), pmPositionCode: $("#s-pm").value, othersHiredBy: "pm",
-    pmHiredBy: {name: $("#s-name").value.trim(), capacity: $("#s-cap").value.trim(), gender: $("#s-g").value}};
-  try{ await db.doc("projects/" + p.code).update({positions, contract, signatories}); editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }
+  try{ await db.doc("projects/" + p.code).update({positions, contract}); editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }
   catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
 }
 
@@ -1603,36 +1728,43 @@ function renderActs(p){
   const catOpts = sel => `<option value="">— بلا فئة —</option>` + cats.map(c => `<option value="${esc(c.id)}" ${c.id === sel ? "selected" : ""}>${esc(c.name)}</option>`).join("");
   const sg = ex.signers || {}, st = ex.start || {};
   box.innerHTML = `
-  <details class="settings" open><summary>بنود الصرف والتوثيقات (لكل المشاريع)</summary>
+  <details class="settings panel" open><summary><span>فئات الصرف والتوثيقات المطلوبة لكل فئة</span></summary>
     <p class="code">حدّد فئة أو أكثر، ثم اختر التوثيقات المطلوبة واحفظ. الفئات المحددة توثيقاتها تظهر بإطار أخضر وعدد التوثيقات.${expCfg ? "" : ""}</p>
     <div class="catgrid">${cats.map(c => `<label class="chk${catDone(c) ? " done" : ""}" title="${catDone(c) ? "محددة توثيقاتها" : "لم تُحدد توثيقاتها بعد"}"><input type="checkbox" name="ecat" value="${esc(c.id)}" ${selCats.has(c.id) ? "checked" : ""}> ${esc(c.name)}${catDone(c) ? ` <span class="code">✓ ${Object.keys(c.docs).length}</span>` : ""}</label>`).join("")}</div>
     <div class="inl"><input id="newcat" placeholder="اسم فئة جديدة"><button type="button" class="ghost" data-act="catadd">+ إضافة فئة</button></div>
     <span id="cat-top" class="msg" aria-live="polite"></span>
     <div id="catEd"></div>
-    <h3>عتبات الشراء العامة</h3>
+  </details>
+  <details class="settings panel"><summary><span>عتبات الشراء العامة</span></summary>
     <p class="code">تُطبَّق على إجمالي الفاتورة بعملة المشروع. اترك «حتى مبلغ» فارغًا في آخر صف ليعني «فما فوق».</p>
     ${thrTable(cfg.thresholds, "g")}
     <div class="row"><span id="thr-msg" class="msg" aria-live="polite"></span><button type="button" data-act="thrsave">حفظ العتبات</button></div>
   </details>
-  <details class="settings"><summary>إعدادات المصاريف لمشروع ${esc(p.code)}</summary>
+`;
+  const pdBox = $("#projDocs"), s0 = p.signatories || {}, pm = s0.pmHiredBy || {}, mi = missingInfo(p).docs;
+  if(pdBox) pdBox.innerHTML = `<details class="settings panel" id="sec-docs" ${mi.length ? "open" : ""}><summary><span>إعداد التوثيقات للمشروع</span>${badge(mi)}</summary>
+    <div class="phead"><span id="xp-msg" class="msg" aria-live="polite"></span><button type="button" data-act="projsave">حفظ</button></div>
+    <h3>عقد مدير المشروع</h3>
     <div class="sgrid">
-      <div><label>رمز المشروع في النماذج</label><input id="x-code" dir="ltr" value="${esc(ex.projectCode || "")}" placeholder="يبقى فارغًا إن لم يوجد"></div>
-      <div><label>العملة في النماذج</label><input id="x-cur" value="${esc(ex.currency || (p.contract || {}).currency || "")}"></div>
-      <div><label>اسم المكتب</label><input id="x-office" value="${esc(ex.office || "")}"></div>
+      <div><label>بند مدير المشروع</label><select id="s-pm">${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===s0.pmPositionCode?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
+      <div><label>يوقّع عقد مدير المشروع</label><input id="s-name" value="${esc(pm.name||"")}"></div>
+      <div><label>صفته</label><input id="s-cap" value="${esc(pm.capacity||"")}"></div>
+      <div><label>الجنس</label><select id="s-g"><option value="f" ${pm.gender==="f"?"selected":""}>أنثى</option><option value="m" ${pm.gender==="m"?"selected":""}>ذكر</option></select></div>
     </div>
-    <h3>الموقّعون</h3>
+    <h3>الموقّعون على النماذج</h3>
     <div class="sgrid">${SIGNERS.map(([k, l]) => `<div><label>${l}: الاسم</label>${signerSel(p, k, (sg[k] || {}).name || "")}</div><div><label>${l}: المنصب</label><input data-sg="${k}" name="t" value="${esc((sg[k] || {}).title || "")}"></div>`).join("")}</div>
     <h3>بداية الترقيم</h3>
     <div class="sgrid">${NUMBERED.map(([k, l]) => `<div><label>أول رقم: ${l}</label><input data-st="${k}" type="number" min="1" value="${esc(st[k] || 1)}"></div>`).join("")}</div>
+    <h3>التوثيقات الإلزامية لكل موظفي المشروع</h3>
+    <div class="wk">${PROJECT_TYPES.map(t => `<label class="chk"><input type="checkbox" name="projreq" value="${esc(t)}" ${(p.projRequired || []).includes(t) ? "checked" : ""}> ${esc(t)}</label>`).join("")}</div>
     <h3>ربط بنود الموازنة بالفئات</h3>
     ${lines.length ? `<div class="tscroll"><table class="ptab ftab" style="min-width:480px"><thead><tr><th>البند</th><th>في الموازنة</th><th>الفئة</th></tr></thead><tbody>
       ${lines.map(x => `<tr><td class="code">${esc(x.code)}</td><td>${esc(x.title)}</td><td><select data-line="${esc(pid(x))}">${catOpts(map[pid(x)] || "")}</select></td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد بنود غير الرواتب في هذا المشروع.</p>'}
     <h3>عتبات خاصة بالمانح</h3>
     <label class="chk"><input type="checkbox" id="x-own" ${ex.thresholds ? "checked" : ""}> هذا المشروع له عتبات خاصة من المانح</label>
     <div id="x-thr" ${ex.thresholds ? "" : "hidden"}>${thrTable(ex.thresholds || cfg.thresholds, "p")}</div>
-    <div class="row"><span id="xp-msg" class="msg" aria-live="polite"></span><button type="button" data-act="projsave">حفظ إعدادات المشروع</button></div>
   </details>`;
-  $("#x-own").onchange = e => { $("#x-thr").hidden = !e.target.checked; };
+  if($("#x-own")) $("#x-own").onchange = e => { $("#x-thr").hidden = !e.target.checked; };
   catPick();
 }
 
@@ -1725,9 +1857,10 @@ async function actClick(t){
     const signers = {}; SIGNERS.forEach(([k]) => { const sv = document.querySelector(`[data-sg="${k}"][name="n"]`).value, n = (sv === "__new" ? document.querySelector(`[data-sg="${k}"][name="nn"]`).value : sv).trim(), ti = document.querySelector(`[data-sg="${k}"][name="t"]`).value.trim(); if(n || ti) signers[k] = {name: n, title: ti}; });
     const start = {}; NUMBERED.forEach(([k]) => { start[k] = Math.max(1, Number(document.querySelector(`[data-st="${k}"]`).value) || 1); });
     const lines = {}; document.querySelectorAll("select[data-line]").forEach(s => { lines[s.dataset.line] = s.value; });
-    const expense = {...(p.expense || {}), projectCode: $("#x-code").value.trim(), currency: $("#x-cur").value.trim(), office: $("#x-office").value.trim(), signers, start, lines,
-      thresholds: $("#x-own").checked ? readThr("p") : null};
-    try{ await db.doc("projects/" + p.code).update({expense}); editing = false; notice(""); m.className = "msg ok"; m.textContent = "تم الحفظ."; }
+    const expense = {...(p.expense || {}), signers, start, lines, thresholds: $("#x-own").checked ? readThr("p") : null};
+    const signatories = {...(p.signatories || {}), pmPositionCode: $("#s-pm").value, othersHiredBy: "pm", pmHiredBy: {name: $("#s-name").value.trim(), capacity: $("#s-cap").value.trim(), gender: $("#s-g").value}};
+    const projRequired = [...document.querySelectorAll('input[name="projreq"]:checked')].map(i => i.value);
+    try{ await db.doc("projects/" + p.code).update({expense, signatories, projRequired}); editing = false; notice(""); render(true); const mm = $("#xp-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; } }
     catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
   }
 }
@@ -1778,7 +1911,7 @@ function renderExpenses(p){
   const list = exOf(p);
   const all = exMonth === "all", inMonth = list.filter(e => all || e.month === exMonth).sort((a, b) => (b.month || "").localeCompare(a.month || "")), open = all ? [] : list.filter(e => !e.done && e.month !== exMonth), other = all ? [] : list.filter(e => e.done && e.month !== exMonth).sort((a, b) => (b.month || "").localeCompare(a.month || ""));
   const lines = (p.positions || []).filter(x => !isStaff(x));
-  box.innerHTML = `<details class="settings" open><summary>المصاريف — ${monLabel(exMonth)}</summary>
+  box.innerHTML = `<details class="settings panel" open><summary><span>عمليات الصرف — ${monLabel(exMonth)}</span></summary>
     <div class="sgrid"><div><label>الشهر</label>${monthPick("ex", exMonth, true)}</div></div>
     <p class="code">شهر العملية هو شهر تاريخ الإيصال. العمليات غير المكتملة تظهر في كل الأشهر حتى تُنشأ إيصالاتها.</p>
     ${inMonth.length ? `<div style="display:grid;gap:10px">${inMonth.map(e => exCard(p, e)).join("")}</div>` : '<p class="empty">لا توجد مصاريف.</p>'}
@@ -1824,7 +1957,7 @@ function exCard(p, e){
   const sup = f.sup || {};
   return `<details class="excard" data-ex-key="${k}" ${exOpen.has(e.key) ? "open" : ""}>
     <summary class="card-head" style="cursor:pointer"><div><div class="title">${esc(e.title || "عملية صرف")}</div>
-      <div class="code">${line ? "بند " + esc(line.code) + " · " : ""}${cat ? esc(cat.name) : '<span class="review">لا فئة مربوطة — حددها في أنشطة المشروع</span>'} · المجموع ${T.total.toLocaleString("en-US")}${e.month ? " · شهر " + esc(e.month) : ""}${e.done ? " · مكتملة" : ""}</div></div><span class="chips">${status}</span></summary>
+      <div class="code">${line ? "بند " + esc(line.code) + " · " : ""}${cat ? esc(cat.name) : '<span class="review">لا فئة مربوطة — حددها في أنشطة المشروع</span>'} · المجموع ${T.total.toLocaleString("en-US")}${e.month ? " · " + monLabel(e.month) : ""}${e.done ? " · مكتملة" : ""}</div></div><span class="chips">${status}</span></summary>
     ${!cat || !forms.length ? '<p class="review">حدّد توثيقات هذه الفئة من تبويب «أنشطة المشروع» أولاً.</p>' : `
     <div class="sgrid">
       <div><label>طريقة الإنشاء</label><select name="mode"><option value="stage" ${mode === "stage" ? "selected" : ""}>مرحلة بمرحلة</option><option value="full" ${mode === "full" ? "selected" : ""}>إنشاء كامل دفعة واحدة</option></select></div>
@@ -2148,16 +2281,12 @@ function renderReport(p){
   const box = $("#repBox"); if(!box) return;
   const ex = p.expense || {}, rates = ex.eurRates || {}, months = projMonthList(p, rpMonth), last = (ex.reports || {})[rpMonth];
   const tx = txList(p, rpMonth), missing = [...new Set(tx.map(t => t.month))].filter(m => !num(rates[m]));
-  box.innerHTML = `<details class="settings"><summary>التقرير المالي للمانح — تراكمي حتى نهاية ${monLabel(rpMonth)}</summary>
+  box.innerHTML = `<details class="settings panel" open><summary><span>التقرير المالي للمانح — تراكمي حتى نهاية ${monLabel(rpMonth)}</span></summary>
     <div class="sgrid"><div><label>حتى نهاية شهر</label>${monthPick("rp", rpMonth)}</div></div>
     <p class="code">يُملأ سجل الصرف (Transactions1) والملخص من إيصالات الرواتب وإيصالات المصاريف حتى نهاية الشهر المختار. الوصف من أسماء البنود بالإنجليزية في الموازنة. طريقة الدفع: نقدي (C).</p>
     <h3>سعر صرف اليورو لكل شهر (من InforEuro: كم ${esc(ex.currency || (p.contract || {}).currency || "ليرة")} لكل 1 يورو)</h3>
     <div class="sgrid">${months.map(m => `<div><label>${MON_AR[+m.slice(5)-1]} ${m.slice(0,4)}</label><input type="number" min="0" step="any" data-rate="${m}" value="${esc(rates[m] ?? "")}"></div>`).join("")}</div>
-    <div class="sgrid">
-      <div><label>الموازنة المعتمدة باليورو (الاتفاقية)</label><input type="number" step="any" id="rp-appr" value="${esc(ex.approvedEur ?? "")}"></div>
-      <div><label>المبالغ المستلمة حتى الآن (يورو)</label><input type="number" step="any" id="rp-recv" value="${esc(ex.receivedEur ?? "")}"></div>
-      <div><label>اسم المنظمة بالإنجليزية</label><input id="rp-org" value="${esc(ex.orgEn ?? "")}"></div>
-    </div>
+    <p class="code">المبلغ المعتمد والمبالغ المستلمة واسم المنظمة تُعدَّل من تبويب «المشروع» ← البيانات الأساسية.</p>
     <p class="code">عدد الحركات: ${tx.length} · المجموع: ${tx.reduce((s, t) => s + t.amount, 0).toLocaleString("en-US")}${missing.length ? ` · <span class="review">ينقص سعر صرف: ${missing.join("، ")}</span>` : ""}</p>
     <div class="row"><span class="current">${last ? "آخر تقرير لهذا الشهر: " + dlink(last.xlsx, "Excel") + (last.pdf ? " · " + dlink(last.pdf, "PDF") : "") : ""}</span>
       <span><span id="rp-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" data-rp="save">حفظ</button> <button type="button" data-rp="make">إنشاء التقرير</button></span></div>
@@ -2167,7 +2296,7 @@ function renderReport(p){
 async function rpSave(){
   const p = projects[current], ex = p.expense || {};
   const eurRates = {...(ex.eurRates || {})}; document.querySelectorAll("[data-rate]").forEach(i => { if(i.value !== "") eurRates[i.dataset.rate] = Number(i.value); else delete eurRates[i.dataset.rate]; });
-  const o = {eurRates, approvedEur: $("#rp-appr").value === "" ? "" : Number($("#rp-appr").value), receivedEur: $("#rp-recv").value === "" ? "" : Number($("#rp-recv").value), orgEn: $("#rp-org").value.trim()};
+  const o = {eurRates};
   await db.doc("projects/" + p.code).update({expense: {...ex, ...o}});
   p.expense = {...ex, ...o};
   return p.expense;
@@ -2258,7 +2387,7 @@ document.getElementById("saveAll").addEventListener("click", saveAll);
 document.addEventListener("change", e => {
   if(e.target.dataset && e.target.dataset.mp){ const w = e.target.closest(".mpick"), m = +w.querySelector('[data-mp="m"]').value, y = w.querySelector('[data-mp="y"]').value;
     const v = m ? `${y}-${String(m).padStart(2, "0")}` : "all";
-    ({ts: () => tsMonth = v, pr: () => prMonth = v, ex: () => exMonth = v, rp: () => rpMonth = v, doc: () => docMonth = v})[w.dataset.sec]();
+    ({ts: () => tsMonth = v, pr: () => prMonth = v, ex: () => exMonth = v, rp: () => rpMonth = v, doc: () => docMonth = v, docp: () => docMonthPay = v, doce: () => docMonthEx = v})[w.dataset.sec]();
     editing = false; render(true); return; }
   if(e.target.name === "wk"){
     const wk = [...document.querySelectorAll('input[name="wk"]:checked')].map(i => +i.value);
@@ -2286,7 +2415,7 @@ document.addEventListener("change", e => {
   if(e.target.name === "spos") e.target.closest("#addStaff").querySelector(".newpos").hidden = e.target.value !== "__new";
 });
 document.addEventListener("input", e => {
-  if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#docBox") || e.target.closest("#actBox") || e.target.closest("#exBox") || e.target.closest("#repBox")) editing = true;
+  if(e.target.closest(".card") || e.target.closest(".settings") || e.target.closest(".pform") || e.target.closest("#tsBox") || e.target.closest("#prBox") || e.target.closest("#actBox") || e.target.closest("#exBox") || e.target.closest("#repBox") || e.target.closest("#projBasics") || e.target.closest("#projDocs") || e.target.closest("#dutiesBox")) editing = true;
   if(e.target.name === "lcode"){ const b = e.target.closest(".addline").querySelector("[data-addline]"); delete b.dataset.ok; b.textContent = "إضافة البند"; }
 });
 document.addEventListener("click", e => {
@@ -2304,17 +2433,19 @@ document.addEventListener("click", e => {
   else if(t.dataset.contract !== undefined) makeContract(t);
   else if(t.id === "saveSettings") saveSettings();
   else if(t.id === "exportXl") exportExcel(t);
-  else if(t.id === "monthAll") monthAll(t);
+  else if(t.dataset.docmake) monthAll(t);
+  else if(t.dataset.pickdir){ curDocKind = t.dataset.pickdir; pickDir(); }
+  else if(t.dataset.pb) saveBasics();
+  else if(t.dataset.goto){ const el = document.getElementById(t.dataset.goto); if(el){ if(el.tagName === "DETAILS") el.open = true; el.scrollIntoView({block: "start", behavior: "smooth"}); } }
   else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
-  else if(t.id === "pickDir") pickDir();
   else if(t.id === "tsMakeBtn" || t.id === "prMakeBtn"){ t.disabled = true; editing = true; (t.id === "tsMakeBtn" ? tsMake(t) : prMake(t)).finally(() => { t.disabled = false; editing = false; setTimeout(() => render(true), 600); }); }
-  else if(t.id === "renumber"){ const m = $("#doc-msg"); renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
-  else if(t.dataset.dl){ const m = $("#doc-msg"); saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
-  else if(t.dataset.dlall !== undefined){ const m = $("#doc-msg"); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
+  else if(t.id === "renumber"){ const m = $("#doc-msg-list"); renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
+  else if(t.dataset.dl){ const m = docMsg(); saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
+  else if(t.dataset.dlall !== undefined){ curDocKind = t.closest("#docBoxEx") ? "ex" : "pay"; const m = docMsg(); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.id === "docSave"){ const p = projects[current], m = $("#doc-msg");
     db.doc("projects/" + p.code).update({docs: {mode: $("#doc-mode").value, pattern: $("#doc-pat").value.trim() || DOC_PAT}})
       .then(() => { editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }).catch(() => { m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }); }
-  else if(t.dataset.tab){ document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === t)); ["fixed","monthly","acts"].forEach(k => $("#tab-" + k).hidden = k !== t.dataset.tab); }
+  else if(t.dataset.tab){ document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b === t)); ["project","staff","exp","rep","global"].forEach(k => $("#tab-" + k).hidden = k !== t.dataset.tab); }
   else if(t.id === "prSave"){ prSaveInputs().then(() => { editing = false; const m=$("#pr-msg"); m.className="msg ok"; m.textContent="تم الحفظ."; }).catch(() => { const m=$("#pr-msg"); m.className="msg err"; m.textContent="تعذّر الحفظ."; }); }
   else if(t.id === "tsSave"){ tsSaveInputs().then(() => { editing = false; const m=$("#ts-msg"); m.className="msg ok"; m.textContent="تم الحفظ."; }).catch(() => { const m=$("#ts-msg"); m.className="msg err"; m.textContent="تعذّر الحفظ."; }); }
   else if(t.dataset.editp){ editPerson = t.dataset.editp; render(true); }
