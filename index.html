@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794765290";</script>
-<script src="config.js?v=1794765290"></script>
+<script>window.APP_VERSION = "1794765406";</script>
+<script src="config.js?v=1794765406"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794765290"></script>
+<script src="platform.js?v=1794765406"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2150,7 +2150,7 @@ function exCard(p, e){
   const inp = (n, l, v, type, extra) => `<div><label>${l}</label><input name="${n}" ${type ? `type="${type}"` : ""} value="${esc(v ?? "")}" ${extra || ""}></div>`;
   const sec = (x, title, body) => show(x) ? `<fieldset class="exs"><legend>${title} ${files[x] ? `<span class="pill read">تم</span>` : ""}</legend>${body}
       <div class="row"><span class="current">${Array.isArray(files[x]) ? files[x].map((o, i) => fileLink(o, "نسخة " + (i + 1))).join(" · ") : fileLink(files[x], "الملف")}</span>
-      ${mode === "stage" && !UPLOAD_FORMS.includes(x) && !(x === "INV" && f.invSrc !== "system") ? `<button type="button" class="ghost" data-ex="gen" data-form="${x}">${files[x] ? "إعادة إنشاء" : "إنشاء"} ${FORM_CODE[x] || x}</button>` : ""}</div></fieldset>` : "";
+      ${!UPLOAD_FORMS.includes(x) && !(x === "INV" && f.invSrc !== "system") ? `<button type="button" class="ghost" data-ex="gen" data-form="${x}">${files[x] ? "إعادة إنشاء" : "إنشاء"} ${FORM_CODE[x] || x}</button>` : ""}</div></fieldset>` : "";
   const items = (e.items && e.items.length ? e.items : [{}]).map((it, i) => `<tr data-it="${i}">
       <td><input name="d" value="${esc(it.d || "")}" aria-label="الوصف"></td><td><input name="u" value="${esc(it.u || "")}" aria-label="الوحدة" style="width:70px"></td>
       <td><input name="q" type="number" min="0" value="${esc(it.q ?? "")}" aria-label="الكمية" style="width:70px"></td>
