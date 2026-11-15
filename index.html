@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794764005";</script>
-<script src="config.js?v=1794764005"></script>
+<script>window.APP_VERSION = "1794764500";</script>
+<script src="config.js?v=1794764500"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794764005"></script>
+<script src="platform.js?v=1794764500"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1967,6 +1967,21 @@ function projStaff(p){
     return {name: v.name, title: (v.gender === "m" ? pos.title_m : pos.title_f) || pos.title || a.title || ""};
   });
 }
+/* صاحب طلب الشراء: لهذا المستند فقط — من الموظفين أو قائمة الأشخاص أو اسم ومنصب يدويًا */
+function reqUI(p, f){
+  const staff = projStaff(p), sn = new Set(staff.map(x => x.name));
+  const others = Object.values(people).map(v => v.name).filter(n => n && !sn.has(n)).sort((a, b) => a.localeCompare(b, "ar"));
+  const cur = f.reqName || "", known = !cur || sn.has(cur) || others.includes(cur), manual = !!cur && (!sn.has(cur) || !!f.reqTitle);
+  const o = (n, t) => `<option value="${esc(n)}" ${!manual && n === cur ? "selected" : ""}>${esc(n)}${t ? " — " + esc(t) : ""}</option>`;
+  const def = signer(p, "requester").name;
+  return `<div><label>صاحب الطلب (لهذا الطلب فقط)</label><select name="reqPick">
+      <option value="">حسب إعداد المشروع${def ? ": " + esc(def) : ""}</option>
+      ${staff.length ? `<optgroup label="موظفو المشروع">${staff.map(x => o(x.name, x.title)).join("")}</optgroup>` : ""}
+      ${others.length ? `<optgroup label="قائمة الأشخاص">${others.map(n => o(n)).join("")}</optgroup>` : ""}
+      <option value="__new" ${manual ? "selected" : ""}>+ اسم ومنصب يدويًا</option></select></div>
+    <div class="reqman" ${manual ? "" : "hidden"}><label>اسم صاحب الطلب</label><input name="reqNew" value="${manual ? esc(cur) : ""}"></div>
+    <div class="reqman" ${manual ? "" : "hidden"}><label>منصبه</label><input name="reqTitle" value="${manual ? esc(f.reqTitle || "") : ""}"></div>`;
+}
 function signerSel(p, k, cur){
   const staff = projStaff(p), sn = new Set(staff.map(x => x.name));
   const others = Object.values(people).map(v => v.name).filter(n => n && !sn.has(n)).sort((a, b) => a.localeCompare(b, "ar"));
@@ -2174,8 +2189,7 @@ function exCard(p, e){
       ${inp("s_name", "الاسم", sup.name)}${inp("s_company", "الاسم التجاري", sup.company)}${inp("s_mobile", "الموبايل", sup.mobile, "", 'dir="ltr"')}
       ${inp("s_email", "البريد", sup.email, "", 'dir="ltr"')}${inp("s_addr", "العنوان", sup.addr)}${inp("s_prof", "المهنة / صفة العقد", sup.prof)}</div></fieldset>` : ""}
     ${sec("PR", "PR — طلب شراء", `<div class="sgrid">${inp("prDate", "تاريخ الطلب", f.prDate, "date")}${inp("delDate", "تاريخ التسليم", f.delDate, "date")}
-      <div><label>صاحب الطلب (لهذا الطلب فقط)</label><select name="reqName"><option value="">حسب إعداد المشروع${signer(p, "requester").name ? ": " + esc(signer(p, "requester").name) : ""}</option>
-        ${projStaff(p).map(x => `<option value="${esc(x.name)}" ${x.name === f.reqName ? "selected" : ""}>${esc(x.name)} — ${esc(x.title)}</option>`).join("")}</select></div></div>`)}
+      ${reqUI(p, f)}</div>`)}
     ${sec("RFQ", "RFQ — عرض سعر", `<div class="sgrid">
       <div><label>النسخ</label><select name="rfqMode"><option value="blank" ${f.rfqMode !== "supplier" ? "selected" : ""}>فارغة للمورّدين (دون أسعار)</option><option value="supplier" ${f.rfqMode === "supplier" ? "selected" : ""}>معبأة ببيانات المورد وأسعاره</option></select></div>
       ${inp("rfqDate", "تاريخ الإرسال", f.rfqDate, "date")}${inp("rfqEnd", "انتهاء صلاحية العرض", f.rfqEnd, "date")}
@@ -2213,8 +2227,9 @@ function exRead(card){
   const e = JSON.parse(JSON.stringify(expenses[card.dataset.exKey] || {}));
   const v = n => { const el = card.querySelector(`[name="${n}"]`); return el ? el.value.trim() : undefined; };
   e.f = e.f || {};
-  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose","cDate","cStart","cEnd","cDuties","reqName"]
+  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose","cDate","cStart","cEnd","cDuties"]
     .forEach(n => { const x = v(n); if(x !== undefined) e.f[n] = x; });
+  const rp = v("reqPick"); if(rp !== undefined){ if(rp === "__new"){ e.f.reqName = v("reqNew") || ""; e.f.reqTitle = v("reqTitle") || ""; } else { e.f.reqName = rp; e.f.reqTitle = ""; } }
   if(card.querySelector('[name="s_name"]')) e.f.sup = {name: v("s_name"), company: v("s_company"), mobile: v("s_mobile"), email: v("s_email"), addr: v("s_addr"), prof: v("s_prof")};
   if(v("mode")) e.mode = v("mode");
   const ps = v("s_person"); if(ps !== undefined && ps !== "__new") e.personKey = ps;
@@ -2277,7 +2292,7 @@ function exFill(p, e, code, copy){
   const line = (p.positions || []).find(x => pid(x) === e.line) || {};
   const items = e.items || [], T = exTotals(e, code !== "PR" && !(code === "RFQ" && f.rfqMode !== "supplier"));
   const blank = code === "RFQ" && (f.rfqMode !== "supplier" || copy > 0);
-  const s = k => { if(k === "requester" && f.reqName){ const x = projStaff(p).find(y => y.name === f.reqName); return {name: f.reqName, title: x ? x.title : ""}; } return signer(p, k); };
+  const s = k => { if(k === "requester" && f.reqName){ const x = projStaff(p).find(y => y.name === f.reqName); return {name: f.reqName, title: f.reqTitle || (x ? x.title : "")}; } return signer(p, k); };
   const c = {}; const rows = (from, to, fn) => { for(let r = from; r <= to; r++){ const it = items[r - from]; Object.assign(c, fn(r, it, r - from + 1)); } };
   const tot = it => it ? num(it.q) * (code === "PR" ? num(it.p) : itemPrice(it)) * (num(it.dur) || 1) : null;
   const wordsCur = v => `${words(v)} ${cur} فقط لا غير`;
@@ -2738,6 +2753,7 @@ document.addEventListener("change", e => {
   if(e.target.name === "dpreset" || e.target.name === "cpreset"){ const box = e.target.closest(".dutyui") || e.target.closest("fieldset") || e.target.closest(".card");
     const ta = box && box.querySelector(e.target.name === "dpreset" ? '[name="dtext"]' : '[name="cDuties"]'); if(ta && e.target.value){ ta.value = (duties[e.target.value] || []).join("\n"); const nm = box.querySelector(e.target.name === "dpreset" ? '[name="dname"]' : '[name="cname"]'); if(nm) nm.value = e.target.value; } editing = true; }
   if(e.target.dataset && e.target.dataset.sg && e.target.name === "n" && e.target.tagName === "SELECT") signerFill(e.target);
+  if(e.target.name === "reqPick"){ const box = e.target.closest(".sgrid"); if(box) box.querySelectorAll(".reqman").forEach(d => d.hidden = e.target.value !== "__new"); }
   if(e.target.dataset && e.target.dataset.mp){ const w = e.target.closest(".mpick"), m = +w.querySelector('[data-mp="m"]').value, y = w.querySelector('[data-mp="y"]').value;
     const v = m ? `${y}-${String(m).padStart(2, "0")}` : "all";
     ({ts: () => tsMonth = v, pr: () => prMonth = v, ex: () => exMonth = v, rp: () => rpMonth = v, doc: () => docMonth = v, docp: () => docMonthPay = v, doce: () => docMonthEx = v, work: () => setWorkMonth(v)})[w.dataset.sec]();
