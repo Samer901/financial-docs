@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794764500";</script>
-<script src="config.js?v=1794764500"></script>
+<script>window.APP_VERSION = "1794764935";</script>
+<script src="config.js?v=1794764935"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794764500"></script>
+<script src="platform.js?v=1794764935"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2176,11 +2176,11 @@ function exCard(p, e){
     <button type="button" class="ghost" data-ex="itadd">+ سطر</button>
     ${thr ? `<p class="${thr.quotes > 1 || thr.tender ? "review" : "code"}">حسب العتبة: ${thr.quotes ? `${thr.quotes} عرض سعر` : "بلا عروض"}${thr.tender ? " · مناقصة" : ""}${thr.opening ? " · محضر فض عروض (يُرفع يدوياً حالياً)" : ""}</p>` : '<p class="code">لم تُحدد عتبات الشراء بعد.</p>'}
     ${supNeeded ? `<fieldset class="exs"><legend>المورد / المتعاقد</legend>
-      <div class="sgrid"><div><label>من قائمة الأشخاص</label><select name="s_person"><option value="">— مورد أو جهة (إدخال يدوي) —</option>
+      <div class="sgrid"><div><label>من قائمة الأشخاص</label><select name="s_person">${has("CONTRACT") ? "" : '<option value="">— مورد أو جهة (إدخال يدوي) —</option>'}
         ${Object.entries(people).sort((a, b) => (a[1].name || "").localeCompare(b[1].name || "", "ar")).map(([pk, v]) => `<option value="${esc(pk)}" ${pk === e.personKey ? "selected" : ""}>${esc(v.name)}</option>`).join("")}
-        <option value="__new">+ شخص جديد</option></select></div>
+        <option value="__new" ${has("CONTRACT") && !exPerson(e) ? "selected" : ""}>+ شخص جديد</option></select></div>
         <div class="current" style="align-self:end">${exPerson(e) ? `الهوية: ${exPerson(e).idFileId ? dlink(exPerson(e).idFileId, "✓") : "✗"} · السيرة: ${exPerson(e).cvFileId ? dlink(exPerson(e).cvFileId, "✓") : "✗"}${exPerson(e).status === "read" ? " · تم التحقق" : (exPerson(e).idFileId ? " · بانتظار قراءة الهوية" : "")}` : ""}</div></div>
-      <div class="newperson" hidden><p class="code">بيانات الشخص الجديد: أدخلها يدوياً، أو ارفع الهوية فقط واطلب من Claude استخراجها.</p><div class="sgrid">
+      <div class="newperson" ${has("CONTRACT") && !exPerson(e) ? "" : "hidden"}><p class="code">بيانات الشخص الجديد: أدخلها يدوياً، أو ارفع الهوية فقط واطلب من Claude استخراجها.</p><div class="sgrid">
         ${inp("np_name", "الاسم الكامل", "")}${inp("np_father", "اسم الأب", "")}${inp("np_mother", "اسم الأم", "")}${inp("np_dob", "تاريخ الميلاد", "", "date")}${inp("np_nid", "الرقم الوطني", "", "", 'dir="ltr"')}
         <div><label>الجنس</label><select name="np_gender"><option value="">—</option><option value="m">ذكر</option><option value="f">أنثى</option></select></div>${inp("np_nat", "الجنسية", "")}</div></div>
       <div class="pfiles" ${exPerson(e) && exPerson(e).idFileId && exPerson(e).cvFileId ? "hidden" : ""}><div class="file"><label style="margin:0">صورة الهوية</label><input type="file" name="np_id" accept="image/jpeg,image/png,application/pdf"></div>
@@ -2267,6 +2267,7 @@ async function exSave(card, say){
     if(fileOf("np_id")){ say("جارٍ رفع الهوية…"); const r = await upload(fileOf("np_id"), FOLD.ids, `ID_${safe}`); if(person.idFileId) await trash(person.idFileId).catch(() => {}); person.idFileId = r.id; person.idFileName = r.title; person.status = "pending"; }
     if(fileOf("np_cv")){ say("جارٍ رفع السيرة…"); const r = await upload(fileOf("np_cv"), FOLD.cvs, `CV_${safe}`); if(person.cvFileId) await trash(person.cvFileId).catch(() => {}); person.cvFileId = r.id; person.cvFileName = r.title; }
     await db.doc("people/" + pk).set(person); people[pk] = person; e.personKey = pk;
+    if(sel.value === "__new"){ const op = document.createElement("option"); op.value = pk; op.textContent = person.name; sel.prepend(op); sel.value = pk; const np = card.querySelector(".newperson"); if(np) np.hidden = true; }
   }
   const folderNeeded = [...card.querySelectorAll('input[type="file"]')].some(i => i.files && i.files[0] && !["np_id","np_cv"].includes(i.name));
   if(folderNeeded){
@@ -2769,7 +2770,7 @@ document.addEventListener("change", e => {
     { const cd = e.target.closest("[data-ex-key]"); if(cd && e.target.type === "date"){ delete cd.dataset.okdates; const w = cd.querySelector(".exwarn"); if(w) w.innerHTML = exWarnings(projects[current], exRead(cd)).map(esc).join("<br>"); } }
     if(e.target.name === "exline") e.target.closest("#exAdd").querySelector(".exother").hidden = e.target.value !== "__other";
     const card = e.target.closest("[data-ex-key]");
-    if(card && e.target.name === "s_person"){
+    if(card && e.target.name === "s_person"){ editing = true;
       const pk = e.target.value, v = people[pk], isNew = pk === "__new";
       card.querySelector(".newperson").hidden = !isNew;
       card.querySelector(".pfiles").hidden = !(isNew || (v && (!v.idFileId || !v.cvFileId)));
@@ -2777,7 +2778,12 @@ document.addEventListener("change", e => {
         const set = (n, val) => { const i = card.querySelector(`[name="${n}"]`); if(i && val) i.value = val; };
         set("s_name", v.name); set("s_mobile", v.mobile); set("s_addr", v.address); set("s_prof", gw(v.gender, pos.title_m, pos.title_f) || pos.title); }
     }
-    if(card && ["mode","invSrc","rfqMode"].includes(e.target.name)){ const k = card.dataset.exKey; expenses[k] = exRead(card); exOpen.add(k); card.outerHTML = exCard(projects[current], {key: k, ...expenses[k]}); }
+    if(card && ["mode","invSrc","rfqMode"].includes(e.target.name)){ const k = card.dataset.exKey;
+      const keep = [...card.querySelectorAll('[name^="np_"]:not([type="file"]),[name="s_person"],[name="reqNew"],[name="reqTitle"]')].map(i => [i.name, i.value]);
+      expenses[k] = exRead(card); exOpen.add(k); card.outerHTML = exCard(projects[current], {key: k, ...expenses[k]});
+      const nc = document.querySelector(`[data-ex-key="${CSS.escape(k)}"]`);
+      if(nc){ keep.forEach(([n, v]) => { const i = nc.querySelector(`[name="${n}"]`); if(i) i.value = v; }); const sp = nc.querySelector('[name="s_person"]'); if(sp) sp.dispatchEvent(new Event("change", {bubbles: true})); }
+      editing = true; }
   }
   if(e.target.closest("#actBox")){ editing = true; if(e.target.name === "ecat") catPick(); if(e.target.dataset.sg && e.target.name === "n") signerFill(e.target); }
   if(e.target.name === "person") syncCard(e.target.closest(".card"));
