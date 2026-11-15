@@ -171,10 +171,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794747280";</script>
-<script src="config.js?v=1794747280"></script>
+<script>window.APP_VERSION = "1794747831";</script>
+<script src="config.js?v=1794747831"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794747280"></script>
+<script src="platform.js?v=1794747831"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -851,6 +851,20 @@ function renderPeople(){
   box.innerHTML = `<details class="settings" ${open || editPerson ? "open" : ""}><summary>الأشخاص وبيانات الهويات (${list.length})</summary>
     <div class="row" style="margin:10px 0"><span class="current">${xl}</span><span><span id="xl-msg" class="msg"></span> <button type="button" id="exportXl">تحديث ملف Excel</button></span></div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>الاسم</th><th>بالإنجليزية</th><th>الرقم الشخصي</th><th>الحالة</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <details class="addline" id="newPerson" style="margin-top:10px"><summary>+ شخص جديد</summary>
+      <p class="code">أدخل البيانات يدوياً، أو ارفع الهوية فقط (مع الاسم) واطلب من Claude استخراج بقية البيانات. إذا أدخلت الرقم الوطني والجنس يُعتبر الشخص متحققاً منه.</p>
+      <div class="sgrid">
+        <div><label>الاسم الكامل *</label><input name="nq_name"></div><div><label>الاسم بالإنجليزية</label><input name="nq_en" dir="ltr"></div>
+        <div><label>اسم الأب</label><input name="nq_father"></div><div><label>اسم الأم</label><input name="nq_mother"></div>
+        <div><label>مكان الولادة</label><input name="nq_bp"></div><div><label>تاريخ الميلاد</label><input name="nq_dob" type="date"></div>
+        <div><label>الرقم الوطني</label><input name="nq_nid" dir="ltr"></div>
+        <div><label>الجنس</label><select name="nq_g"><option value="">—</option><option value="m">ذكر</option><option value="f">أنثى</option></select></div>
+        <div><label>الجنسية</label><input name="nq_nat"></div><div><label>الهاتف</label><input name="nq_mob" dir="ltr"></div><div><label>العنوان</label><input name="nq_addr"></div>
+      </div>
+      <div class="file"><label style="margin:0">صورة الهوية</label><input type="file" name="nq_id" accept="image/jpeg,image/png,application/pdf"></div>
+      <div class="file"><label style="margin:0">السيرة الذاتية</label><input type="file" name="nq_cv" accept="application/pdf,.doc,.docx,image/jpeg,image/png"></div>
+      <div class="row"><span class="msg" id="nq-msg" aria-live="polite"></span><button type="button" data-newp="1">حفظ الشخص</button></div>
+    </details>
   </details>`;
 }
 
@@ -865,6 +879,28 @@ function personForm(k, v){
   };
   return `<div class="pform" data-pk="${esc(k)}"><div class="sgrid">${PF.map(field).join("")}</div>
     <div class="row"><span class="msg pmsg"></span><span><button type="button" class="x" data-cancelp>إلغاء</button> <button type="button" data-savep>حفظ</button></span></div></div>`;
+}
+
+async function addPerson(btn){
+  const box = $("#newPerson"), m = $("#nq-msg"), g = n => { const i = box.querySelector(`[name="${n}"]`); return i ? i.value.trim() : ""; }, fl = n => { const i = box.querySelector(`[name="${n}"]`); return i && i.files[0]; };
+  const say = (t, err) => { m.className = "msg" + (err ? " err" : " ok"); m.textContent = t; };
+  const name = g("nq_name"); if(!name) return say("أدخل الاسم الكامل.", true);
+  if(Object.values(people).some(v => (v.name || "").replace(/\s+/g, " ") === name.replace(/\s+/g, " "))) return say("هذا الاسم موجود في القائمة.", true);
+  const nid = g("nq_nid"); if(nid && people[nid]) return say("هذا الرقم الوطني مسجّل لشخص آخر.", true);
+  if(!mcp && (fl("nq_id") || fl("nq_cv"))) return say("رفع الملفات غير متاح هنا.", true);
+  btn.disabled = true;
+  try{
+    const en = g("nq_en"), parts = name.split(/\s+/), ep = en.split(/\s+/);
+    const person = {name, nameEn: en, firstName: parts[0] || "", lastName: parts.length > 1 ? parts[parts.length - 1] : "", firstEn: ep[0] || "", lastEn: ep.length > 1 ? ep[ep.length - 1] : "",
+      father: g("nq_father"), mother: g("nq_mother"), birthPlace: g("nq_bp"), dob: g("nq_dob"), nid, gender: g("nq_g"), nationality: g("nq_nat"), mobile: g("nq_mob"), address: g("nq_addr"),
+      idFileId: "", cvFileId: "", docs: [], status: nid && g("nq_g") ? "read" : "pending"};
+    const safe = name.replace(/[\\/:*?"<>|]/g, " ").trim();
+    if(fl("nq_id")){ say("جارٍ رفع الهوية…"); const r = await upload(fl("nq_id"), FOLD.ids, `ID_${safe}`); person.idFileId = r.id; person.idFileName = r.title; }
+    if(fl("nq_cv")){ say("جارٍ رفع السيرة…"); const r = await upload(fl("nq_cv"), FOLD.cvs, `CV_${safe}`); person.cvFileId = r.id; person.cvFileName = r.title; }
+    await db.doc("people/" + (nid || "new-" + Date.now().toString(36))).set(person);
+    editing = false; render(true);
+    const mm = $("#nq-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = `تمت إضافة ${name}${person.status === "read" ? "" : " — بانتظار استخراج بيانات الهوية"}.`; }
+  }catch(e){ btn.disabled = false; say(e && e.code === "too_big" ? "حجم الملف كبير." : mcpMessage(e), true); }
 }
 
 async function savePerson(btn){
@@ -2284,6 +2320,7 @@ document.addEventListener("click", e => {
   else if(t.dataset.editp){ editPerson = t.dataset.editp; render(true); }
   else if(t.dataset.cancelp !== undefined){ editPerson = ""; render(true); }
   else if(t.dataset.savep !== undefined) savePerson(t);
+  else if(t.dataset.newp !== undefined) addPerson(t);
   else if(t.id === "saveDuties") saveDuties();
   else if(t.dataset.rmline) removeLine(t);
   else if(t.dataset.del) deleteDoc(t);
