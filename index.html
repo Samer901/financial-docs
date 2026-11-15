@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794753467";</script>
-<script src="config.js?v=1794753467"></script>
+<script>window.APP_VERSION = "1794756244";</script>
+<script src="config.js?v=1794756244"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794753467"></script>
+<script src="platform.js?v=1794756244"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -949,8 +949,8 @@ async function makeContract(btn){
       P4: `من أجل تنفيذ الخطة الاستراتيجية لفريق سوريانا الأمل وبالاستناد على نظرية التغيير التي يعمل عليها الفريق والتي تعتمد على بناء قدرات النساء وتمكينهن وخلق مساحة داعمة وتقديم خدمات أفضل للوصول الى مشاركة فاعلة بعملية صنع واتخاذ القرار، يحتاج الفريق ل${title}${c.label ? " ل" + c.label : ""}، ضمن فريق سوريانا الأمل`,
       P5: `وبما أن ${gw(gd,"السيد","السيدة")} ${nm} ${gw(gd,"جنسيته","جنسيتها")} ${nat}، ${gw(gd,"والمشار إليه","والمشار إليها")} بالطرف الثاني في هذا العقد ${gw(gd,"لديه","لديها")} الخبرة اللازمة والمهارات والامكانيات للعمل ك${title} ضمن المشروع سيتم التعاقد ${gw(gd,"معه","معها")} ضمن فريق سوريانا الأمل والمشار إليه في هذا العقد بالطرف الأول ${gw(rep.gender,"والممثل عنه السيد","والممثلة عنه السيدة")} ${rep.name} ${gw(rep.gender,"بصفته","بصفتها")} ${rep.capacity}`,
       SALARY: `يحدد الراتب الشهري بقيمة ${Number(pos.salary).toLocaleString("en-US")} ${c.currency} (${words(pos.salary)} ${c.currency}) فقط لا غير، شهرياً.`,
-      PERIOD: `${months} من تاريخ ${c.start} حتى ${c.end}`,
-      P31: `يعي الطرفين بالحفاظ على المعلومات التي يقدمها كلاهما (وتحديداً الطرف الثاني)، ولا تعتبر متاحة للمشاركة إلا بكتاب وموافقة من الطرفين وبناءً على ما سبق تم التعاقد بين الطرفين بصورة منه وتم تحرير هذا العقد بصيغة واحدة وفقاً للبنود المذكورة بتاريخ ${c.date || c.start}`,
+      PERIOD: `${months} من تاريخ ${String(c.start).replace(/-/g, "/")} حتى ${String(c.end).replace(/-/g, "/")}`,
+      P31: `يعي الطرفين بالحفاظ على المعلومات التي يقدمها كلاهما (وتحديداً الطرف الثاني)، ولا تعتبر متاحة للمشاركة إلا بكتاب وموافقة من الطرفين وبناءً على ما سبق تم التعاقد بين الطرفين بصورة منه وتم تحرير هذا العقد بصيغة واحدة وفقاً للبنود المذكورة بتاريخ ${String(c.date || c.start).replace(/-/g, "/")}`,
       SIG_A: rep.name, SIG_B: nm
     };
     say("جارٍ تجهيز العقد…");
@@ -1200,6 +1200,30 @@ function setCell(xml, ref, val){
   });
 }
 
+/* تكبير ارتفاع الصفوف لتملأ الصفحة عند التحويل */
+function stretchRows(xml, maxRow, f){
+  return xml.replace(/<row r="(\d+)"([^>]*)>/g, (all, r, attrs) => {
+    if(+r > maxRow) return all;
+    const m = attrs.match(/ ht="([\d.]+)"/), ht = m ? +m[1] : 15;
+    const a = attrs.replace(/ ht="[\d.]+"/, "").replace(/ customHeight="\d"/, "");
+    return `<row r="${r}"${a} ht="${(ht * f).toFixed(2)}" customHeight="1">`;
+  });
+}
+/* أعمدة أيام الشهر بعرض موحّد */
+function uniformCols(xml, from, to, width){
+  return xml.replace(/<cols>([\s\S]*?)<\/cols>/, (all, inner) => {
+    const cols = [...inner.matchAll(/<col ([^>]*)\/>/g)].map(m => m[1]);
+    const out = [];
+    cols.forEach(a => { const mn = +(a.match(/min="(\d+)"/) || [])[1], mx = +(a.match(/max="(\d+)"/) || [])[1];
+      if(mx < from || mn > to){ out.push(`<col ${a}/>`); return; }
+      if(mn < from) out.push(`<col ${a.replace(/max="\d+"/, `max="${from - 1}"`)}/>`);
+      if(mx > to) out.push(`<col ${a.replace(/min="\d+"/, `min="${to + 1}"`)}/>`); });
+    out.push(`<col min="${from}" max="${to}" width="${width}" customWidth="1"/>`);
+    out.sort((a, b) => +a.match(/min="(\d+)"/)[1] - +b.match(/min="(\d+)"/)[1]);
+    return `<cols>${out.join("")}</cols>`;
+  });
+}
+
 function fillTs(xml, d){
   let x = xml;
   const rep = {NAME: d.name, POSITION: d.position, MONTH_EN: MON_EN[d.m-1], MONTH_AR: MON_AR[d.m-1], YEAR: String(d.y), PROJECT: d.project, NOTES: d.notes};
@@ -1217,7 +1241,7 @@ function fillTs(xml, d){
     x = setCell(x, c+"10", isH ? d.hours : null);
     x = setCell(x, c+"11", isL ? d.hours : null);
   }
-  return x;
+  return stretchRows(uniformCols(x, 5, 35, 7.2), 28, 1.45);
 }
 
 async function tsMake(btn){
@@ -1373,7 +1397,7 @@ async function prMake(btn){
     // جدول الرواتب
     say("جارٍ إنشاء جدول الرواتب…");
     const pt = await loadX(templates.payroll);
-    let x = rep(pt.xml, {TITLE: `جدول الرواتب الشهرية فريق سوريانا الأمل عن شهر ${MON_AR[m-1]} ${y} Monthly Payroll Schedule for Soryana Al-Amal Team for ${MON_EN[m-1]} ${y}`,
+    let x = rep(pt.xml, {TITLE: `جدول الرواتب الشهرية فريق سوريانا الأمل عن شهر ${MON_AR[m-1]} ${y} Monthly Payroll Schedule for Souryana Al-Amal Team for ${MON_EN[m-1]} ${y}`,
       SAL_HDR: `الراتب (${cur})`, DATE: date, FIN_NAME: fin ? fin.name : "", PM_NAME: pm ? pm.name : ""});
     for(let r = 7; r <= 19; r++){
       const it = staff[r - 7], d = it ? (inp.deductions[it.id] || {}) : {};
@@ -1381,6 +1405,8 @@ async function prMake(btn){
                       : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, I: null};
       for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
     }
+    for(let r = 7 + staff.length; r <= 19; r++) x = x.replace(new RegExp(`<row r="${r}"(?![^>]*hidden)`), `<row r="${r}" hidden="1"`);
+    x = stretchRows(x, 24, 1.25);
     const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, false, [24, 9]);
     await trashSet(files.payroll); files.payroll = pf;
     // الإيصالات والفواتير
@@ -1393,6 +1419,7 @@ async function prMake(btn){
       let vx = rep(vt.xml, {DATE: date, NO: `${prMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
+      vx = stretchRows(vx, 37, 1.5);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
       const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, true, [0, 1, 37, 13], 2);
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
@@ -1534,7 +1561,7 @@ function receiptUnits(p){
       const a = assignments[p.code + "__" + id], v = a && people[a.personKey], contract = contractDoc(a);
       const others = v ? (v.docs || []).concat(((a && a.docs) || []).filter(x => x.type !== "عقد العمل")) : [];
       const parts = [["إيصال الراتب", (pf.vouchers[id] || {}).pdf], ["جدول الرواتب", (pf.payroll || {}).pdf], ["جدول الدوام", (tf[id] || {}).pdf],
-        ["العقد", contract && contract.fileId], ["الهوية", v && v.idFileId], ["السيرة الذاتية", v && v.cvFileId]].concat(others.map(x => [x.type, x.fileId])).filter(x => x[1]);
+        ["العقد", contract && contract.fileId, {skipCover: !!(contract && contract.wordId)}], ["الهوية", v && v.idFileId], ["السيرة الذاتية", v && v.cvFileId]].concat(others.map(x => [x.type, x.fileId])).filter(x => x[1]);
       u.push({key: `pay:${d.month}:${id}`, date: monthEnd(d.month), month: d.month, line: pos.code, desc: `${pos.titleEn || pos.title} salary - ${MON_EN[m - 1]} ${y}`, amount: num(pos.salary), label: `${pos.code} - ${v ? v.name : pos.title}`, parts});
     });
   });
@@ -1599,6 +1626,28 @@ async function renumberDocs(say){
   }catch(e){ await db.doc("projects/" + p.code).update({docFiles}).catch(() => {}); say(mcpMessage(e), true); }
 }
 
+/* توحيد الصفحات على مقاس A4: الصفحات الصغيرة (كوجهي الهوية) تُجمع اثنتين في صفحة */
+async function addA4(out, src, idx){
+  const W = 595.28, H = 841.89, M = 28, isA4 = (w, h) => Math.abs(Math.min(w, h) - W) < 8 && Math.abs(Math.max(w, h) - H) < 8;
+  let pending = null;
+  const flush = () => { pending = null; };
+  for(const i of idx){
+    const pg = src.getPage(i), {width: w, height: h} = pg.getSize();
+    if(isA4(w, h)){ flush(); const [cp] = await out.copyPages(src, [i]); out.addPage(cp); continue; }
+    const ep = await out.embedPage(pg);
+    const small = w <= W && h <= H / 2 + 20;
+    if(small){
+      const slotH = (H - 3 * M) / 2, sc = Math.min((W - 2 * M) / w, slotH / h);
+      if(!pending){ const np = out.addPage([W, H]); np.drawPage(ep, {x: (W - w * sc) / 2, y: H - M - h * sc, width: w * sc, height: h * sc}); pending = np; }
+      else { pending.drawPage(ep, {x: (W - w * sc) / 2, y: M + (slotH - h * sc), width: w * sc, height: h * sc}); pending = null; }
+      continue;
+    }
+    flush();
+    const land = w > h, PW = land ? H : W, PH = land ? W : H, sc = Math.min((PW - 2 * M) / w, (PH - 2 * M) / h);
+    const np = out.addPage([PW, PH]); np.drawPage(ep, {x: (PW - w * sc) / 2, y: (PH - h * sc) / 2, width: w * sc, height: h * sc});
+  }
+}
+
 async function buildDocs(say, kind){
   const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
   const p = projects[current], units = receiptUnits(p), mine = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month));
@@ -1611,10 +1660,12 @@ async function buildDocs(say, kind){
   for(const x of mine){
     n++;
     const merged = await PDFLib.PDFDocument.create(), skipped = [];
-    for(const [t, fid] of x.parts){
+    for(const [t, fid, opt] of x.parts){
       say(`جارٍ دمج المستند ${x.n} (${n}/${mine.length}) — ${t}…`);
       try{ const bytes = await toPdfBytes(fid, root); if(!bytes){ skipped.push(t); continue; }
-        const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true}); (await merged.copyPages(src, src.getPageIndices())).forEach(pg => merged.addPage(pg)); }
+        const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true});
+        let idx = src.getPageIndices(); if(opt && opt.skipCover && idx.length > 1) idx = idx.slice(1);
+        await addA4(merged, src, idx); }
       catch(e){ skipped.push(t); }
     }
     const blob = new Blob([await merged.save()], {type: "application/pdf"}), name = `${x.n}.pdf`;
@@ -1964,7 +2015,7 @@ const FORM_TPL = {PR:"12qWdSZPjjusDiaby5mEoA-pKCUWyTrsf", RFQ:"1oHi5wso6NHXPnp6y
   INV:"1Q3tCrozyju8A2Fyaj4MbKY1TxqXQNwN0", RCPT:"1G2RXryPZnqqSGt8KTjMAuSp51X4IVQRF", SRN:"1paJ5g--brYwXGCdvK86O3cfVDItsdR73", ATT:"1pjij7De75nVHEmlJmqvAlzUKlehp-Xu3"};
 const FORM_RANGE = {PR:[60,10], RFQ:[73,9], PO:[45,8], GRN:[65,7], INV:[36,9], RCPT:[30,14], SRN:[26,8], ATT:[15,8]};
 const UPLOAD_FORMS = []; // كل النماذج تُولَّد؛ العقد يُولَّد من قالب الخبير ويمكن رفع نسخته الموقّعة
-const EXPERT_TPL = "1B6yU1YnXvZ3-ayPSIZZBy1A_e8edvwID";
+const EXPERT_TPL = "19FU9mah6lSqRgGboaH6PIwOpPuisqmOP";
 const exPerson = e => e.personKey ? people[e.personKey] : null;
 function attFile(e, t){
   const a = (e.att || {})[t]; if(a) return a.id;
@@ -2351,7 +2402,7 @@ async function exContract(p, e, say, wordOnly){
 function exParts(p, e){
   const cat = exCat(p, e), files = e.files || {}, parts = [];
   for(const c of exForms(cat)){ const o = files[c]; if(!o) continue;
-    [].concat(o).forEach((x, i, arr) => parts.push([(FORM_CODE[c] || c) + (arr.length > 1 ? " " + (i + 1) : ""), x.pdf || x.id || x.xlsx])); }
+    [].concat(o).forEach((x, i, arr) => parts.push([(FORM_CODE[c] || c) + (arr.length > 1 ? " " + (i + 1) : ""), x.pdf || x.id || x.xlsx, {skipCover: c === "CONTRACT" && !!x.word}])); }
   exAttach(cat).forEach(t => { const id = attFile(e, t); if(id) parts.push([t, id]); });
   return parts.filter(x => x[1]);
 }
