@@ -168,10 +168,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794701255";</script>
-<script src="config.js?v=1794701255"></script>
+<script>window.APP_VERSION = "1794702449";</script>
+<script src="config.js?v=1794702449"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794701255"></script>
+<script src="platform.js?v=1794702449"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1685,12 +1685,13 @@ const signer = (p, k) => (((p.expense || {}).signers || {})[k]) || {name: "", ti
 function renderExpenses(p){
   const box = $("#exBox"); if(!box || !tsMonth) return;
   const list = exOf(p);
-  const inMonth = list.filter(e => e.month === tsMonth), open = list.filter(e => !e.done && e.month !== tsMonth);
+  const inMonth = list.filter(e => e.month === tsMonth), open = list.filter(e => !e.done && e.month !== tsMonth), other = list.filter(e => e.done && e.month !== tsMonth).sort((a, b) => (b.month || "").localeCompare(a.month || ""));
   const lines = (p.positions || []).filter(x => !isStaff(x));
   box.innerHTML = `<details class="settings" open><summary>المصاريف — ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
     <p class="code">شهر العملية هو شهر تاريخ الإيصال. العمليات غير المكتملة تظهر في كل الأشهر حتى تُنشأ إيصالاتها.</p>
     ${inMonth.length ? `<div style="display:grid;gap:10px">${inMonth.map(e => exCard(p, e)).join("")}</div>` : '<p class="empty">لا توجد مصاريف في هذا الشهر.</p>'}
     ${open.length ? `<h3>قيد التنفيذ</h3><div style="display:grid;gap:10px">${open.map(e => exCard(p, e)).join("")}</div>` : ""}
+    ${other.length ? `<details class="duties"><summary>عمليات مكتملة في أشهر أخرى (${other.length})</summary><div style="display:grid;gap:10px;margin-top:8px">${other.map(e => exCard(p, e)).join("")}</div></details>` : ""}
     <details class="addline" id="exAdd"><summary>+ عملية صرف</summary>
       <div class="alg" style="grid-template-columns:1fr 1fr">
         <div><label>البند</label><select name="exline">${lines.map(x => `<option value="${esc(pid(x))}">${esc(x.code)} — ${esc(x.title)}</option>`).join("")}<option value="__other">+ مصروف آخر خارج البنود</option></select></div>
@@ -1731,7 +1732,7 @@ function exCard(p, e){
   const sup = f.sup || {};
   return `<details class="excard" data-ex-key="${k}" ${exOpen.has(e.key) ? "open" : ""}>
     <summary class="card-head" style="cursor:pointer"><div><div class="title">${esc(e.title || "عملية صرف")}</div>
-      <div class="code">${line ? "بند " + esc(line.code) + " · " : ""}${cat ? esc(cat.name) : '<span class="review">لا فئة مربوطة — حددها في أنشطة المشروع</span>'} · المجموع ${T.total.toLocaleString("en-US")}${e.done ? " · مكتملة" : ""}</div></div><span class="chips">${status}</span></summary>
+      <div class="code">${line ? "بند " + esc(line.code) + " · " : ""}${cat ? esc(cat.name) : '<span class="review">لا فئة مربوطة — حددها في أنشطة المشروع</span>'} · المجموع ${T.total.toLocaleString("en-US")}${e.month ? " · شهر " + esc(e.month) : ""}${e.done ? " · مكتملة" : ""}</div></div><span class="chips">${status}</span></summary>
     ${!cat || !forms.length ? '<p class="review">حدّد توثيقات هذه الفئة من تبويب «أنشطة المشروع» أولاً.</p>' : `
     <div class="sgrid">
       <div><label>طريقة الإنشاء</label><select name="mode"><option value="stage" ${mode === "stage" ? "selected" : ""}>مرحلة بمرحلة</option><option value="full" ${mode === "full" ? "selected" : ""}>إنشاء كامل دفعة واحدة</option></select></div>
@@ -1776,6 +1777,7 @@ function exCard(p, e){
     ${sec("RCPT", "Receipt — إيصال دفع", `<div class="sgrid">${inp("rcptDate", "تاريخ الإيصال (يحدد شهر العملية)", f.rcptDate, "date")}${inp("rcptPurpose", "الهدف في الإيصال", f.rcptPurpose, "", 'placeholder="افتراضياً: الهدف / الوصف"')}</div>`)}
     ${att.length ? `<fieldset class="exs"><legend>المستندات المرفقة</legend>${att.map(t => `<div class="file"><label style="margin:0">${esc(t)} ${cat.docs[t] === "req" ? '<span class="req">*</span>' : '<span class="code">(اختياري)</span>'}</label>
       ${attFile(e, t) ? dlink(attFile(e, t), (e.att || {})[t] ? "الملف الحالي" : "من ملف الشخص") : ""}<input type="file" name="att" data-type="${esc(t)}" accept="application/pdf,image/jpeg,image/png,.doc,.docx"></div>`).join("")}</fieldset>` : ""}`}
+    <div class="review exwarn">${exWarnings(p, e).map(esc).join("<br>")}</div>
     <div class="row"><span class="msg exmsg" aria-live="polite"></span><span>
       <button type="button" class="x" data-ex="del">حذف العملية</button>
       <button type="button" class="ghost" data-ex="save">حفظ</button>
@@ -1910,10 +1912,28 @@ async function exGenForm(p, e, code, say){
   e.files = e.files || {}; e.files[code] = code === "RFQ" ? out : out[0];
 }
 
+function exWarnings(p, e){
+  const f = e.f || {}, forms = exForms(exCat(p, e)), w = [];
+  const seq = [["PR","prDate","طلب الشراء"],["RFQ","rfqDate","إرسال عرض السعر"],["PO","poDate","أمر الشراء"],["CONTRACT","cDate","تحرير العقد"],["CONTRACT","cStart","بداية التنفيذ"],
+    ["CONTRACT","cEnd","نهاية التنفيذ"],["GRN","grnDate","استلام المواد"],["SRN","srnDate","استلام الخدمة"],["INV","invDate","الفاتورة"],["RCPT","rcptDate","الإيصال"]]
+    .filter(([k, n]) => forms.includes(k) && f[n]);
+  for(let i = 1; i < seq.length; i++){ const [, n, l] = seq[i];
+    const prev = seq.slice(0, i).filter(x => f[x[1]] > f[n]).pop();
+    if(prev) w.push(`تاريخ ${l} (${dmy(f[n])}) قبل تاريخ ${prev[2]} (${dmy(f[prev[1]])}).`); }
+  if(f.delDate && f.prDate && f.delDate < f.prDate) w.push("تاريخ التسليم قبل تاريخ طلب الشراء.");
+  if(f.rfqEnd && f.rfqDate && f.rfqEnd < f.rfqDate) w.push("انتهاء صلاحية العرض قبل تاريخ إرساله.");
+  if(forms.includes("SRN") && f.srnDate && f.cEnd && f.srnDate < f.cEnd) w.push("استلام الخدمة قبل نهاية التنفيذ.");
+  seq.forEach(([, n, l]) => { if(p.start && f[n] < p.start) w.push(`تاريخ ${l} قبل بداية المشروع (${dmy(p.start)}).`); else if(p.end && f[n] > p.end) w.push(`تاريخ ${l} بعد نهاية المشروع (${dmy(p.end)}).`); });
+  return w;
+}
+
 async function exGenerate(card, codes, say){
   const p = projects[current];
   if(!mcp){ say("الوصول إلى Google Drive غير متاح في هذا العرض.", true); return; }
   try{
+    const warn = exWarnings(p, exRead(card));
+    if(warn.length && card.dataset.okdates !== "1"){ card.dataset.okdates = "1"; say("تواريخ غير متسلسلة (انظر التنبيه). اضغط زر الإنشاء مرة أخرى للمتابعة رغم ذلك.", true); return; }
+    delete card.dataset.okdates;
     say("جارٍ الحفظ…");
     const e = await exSave(card, say), key = card.dataset.exKey;
     const cat = exCat(p, e);
@@ -2032,6 +2052,7 @@ document.addEventListener("change", e => {
   if(e.target.closest("#tsBox") || e.target.closest("#prBox")) editing = true;
   if(e.target.closest(".card")) editing = true;
   if(e.target.closest("#exBox")){ editing = true;
+    { const cd = e.target.closest("[data-ex-key]"); if(cd && e.target.type === "date"){ delete cd.dataset.okdates; const w = cd.querySelector(".exwarn"); if(w) w.innerHTML = exWarnings(projects[current], exRead(cd)).map(esc).join("<br>"); } }
     if(e.target.name === "exline") e.target.closest("#exAdd").querySelector(".exother").hidden = e.target.value !== "__other";
     const card = e.target.closest("[data-ex-key]");
     if(card && e.target.name === "s_person"){
