@@ -269,10 +269,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794758778";</script>
-<script src="config.js?v=1794758778"></script>
+<script>window.APP_VERSION = "1794758950";</script>
+<script src="config.js?v=1794758950"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794758778"></script>
+<script src="platform.js?v=1794758950"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -2653,6 +2653,49 @@ async function stepSave(){
 }
 function goStep(k){ step = k; page = "setup"; editing = false; setHash(); render(true); window.scrollTo({top: 0}); }
 
+
+/* ===== مزامنة: إزالة سجلات الملفات المحذوفة من الدرايف ===== */
+let syncBusy = false, syncAt = 0;
+const mainId = o => o ? (o.pdf || o.xlsx || o.id || o.fileId || o.word || "") : "";
+async function syncDeleted(force){
+  if(syncBusy || !window.appStore || !window.appStore.missingFiles || !db) return;
+  if(!force && Date.now() - syncAt < 90000) return;
+  syncBusy = true; syncAt = Date.now();
+  try{
+    const ids = [];
+    Object.values(payrolls).forEach(d => { const f = d.files || {}; ids.push(mainId(f.payroll)); Object.values(f.vouchers || {}).forEach(o => ids.push(mainId(o))); });
+    Object.values(timesheets).forEach(d => Object.values(d.files || {}).forEach(o => ids.push(mainId(o))));
+    Object.values(projects).forEach(p => Object.values(p.docFiles || {}).forEach(o => ids.push(o.id)));
+    Object.values(expenses).forEach(e => { Object.values(e.files || {}).forEach(o => [].concat(o).forEach(x => ids.push(mainId(x)))); Object.values(e.att || {}).forEach(o => ids.push(o.id)); });
+    Object.values(assignments).forEach(a => (a.docs || []).forEach(d => ids.push(d.fileId || d.wordId)));
+    Object.values(people).forEach(v => { ids.push(v.idFileId, v.cvFileId); (v.docs || []).forEach(d => ids.push(d.fileId)); });
+    const gone = await window.appStore.missingFiles(ids.filter(Boolean));
+    if(!gone.size) return;
+    const G = o => o && gone.has(mainId(o)); let n = 0;
+    for(const [k, d] of Object.entries(payrolls)){ const f = JSON.parse(JSON.stringify(d.files || {})); let ch = false;
+      if(G(f.payroll)){ delete f.payroll; ch = true; } for(const id in (f.vouchers || {})) if(G(f.vouchers[id])){ delete f.vouchers[id]; ch = true; }
+      if(ch){ n++; await db.doc("payroll/" + k).set({...d, files: f}); } }
+    for(const [k, d] of Object.entries(timesheets)){ const f = {...(d.files || {})}; let ch = false;
+      for(const id in f) if(G(f[id])){ delete f[id]; ch = true; } if(ch){ n++; await db.doc("timesheets/" + k).set({...d, files: f}); } }
+    for(const [k, p] of Object.entries(projects)){ const df = {...(p.docFiles || {})}; let ch = false;
+      for(const id in df) if(gone.has(df[id].id)){ delete df[id]; ch = true; } if(ch){ n++; await db.doc("projects/" + k).set({...p, docFiles: df}); } }
+    for(const [k, e] of Object.entries(expenses)){ const ne = JSON.parse(JSON.stringify(e)); let ch = false;
+      for(const c in (ne.files || {})){ const o = ne.files[c];
+        if(Array.isArray(o)){ const f = o.filter(x => !G(x)); if(f.length !== o.length){ ch = true; if(f.length) ne.files[c] = f; else delete ne.files[c]; } }
+        else if(G(o)){ delete ne.files[c]; ch = true; } }
+      for(const t in (ne.att || {})) if(gone.has(ne.att[t].id)){ delete ne.att[t]; ch = true; }
+      if(ch){ ne.done = !!(ne.files || {}).RCPT; n++; await db.doc("expenses/" + k).set(ne); } }
+    for(const [k, a] of Object.entries(assignments)){ const docs = (a.docs || []).filter(d => !gone.has(d.fileId || d.wordId));
+      if(docs.length !== (a.docs || []).length){ n++; await db.doc("assignments/" + k).set({...a, docs}); } }
+    for(const [k, v] of Object.entries(people)){ const nv = {...v}; let ch = false;
+      if(gone.has(nv.idFileId)){ nv.idFileId = ""; nv.idFileName = ""; ch = true; } if(gone.has(nv.cvFileId)){ nv.cvFileId = ""; nv.cvFileName = ""; ch = true; }
+      const docs = (nv.docs || []).filter(d => !gone.has(d.fileId)); if(docs.length !== (nv.docs || []).length){ nv.docs = docs; ch = true; }
+      if(ch){ n++; await db.doc("people/" + k).set(nv); } }
+    if(n){ editing = false; render(true); notice(`أُزيل من التطبيق ${gone.size} ملف حُذف من الدرايف.`); }
+  }catch(e){ console.error("sync", e); }
+  finally{ syncBusy = false; }
+}
+window.addEventListener("focus", () => syncDeleted(false));
 /* فحص وجود نسخة أحدث من التطبيق */
 async function checkVersion(){
   try{
@@ -2791,6 +2834,7 @@ document.addEventListener("click", e => {
     render();
   }, () => notice("تعذّر تحميل قائمة الأشخاص.", true));
   loadDir();
+  setTimeout(() => syncDeleted(true), 4000);
   mcp = await claude.use("mcp");
   if(mcp){
     try{ const t = await mcp.listTools(); fileArgs = !!t.fileArgs; }catch(_){}

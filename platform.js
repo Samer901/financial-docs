@@ -253,5 +253,14 @@
       return null;
     },
   };
-  window.appStore = { flush, applyInbox };
+  /* حالة الملفات: يعيد مجموعة المعرّفات المحذوفة أو الموجودة في السلة */
+  async function missingFiles(ids) {
+    const gone = new Set(), list = [...new Set(ids.filter(Boolean))]; let i = 0;
+    async function worker() { while (i < list.length) { const id = list[i++];
+      try { const r = await (await gfetch(`${API}/files/${id}?fields=id,trashed`)).json(); if (r.trashed) gone.add(id); }
+      catch (e) { if (/Drive 404/.test((e && e.message) || "")) gone.add(id); } } }
+    await Promise.all(Array.from({ length: 6 }, worker));
+    return gone;
+  }
+  window.appStore = { flush, applyInbox, missingFiles };
 })();
