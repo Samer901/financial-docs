@@ -267,5 +267,12 @@
     await Promise.all(Array.from({ length: 6 }, worker));
     return gone;
   }
-  window.appStore = { flush, applyInbox, missingFiles };
+  async function fileTimes(ids) {
+    const out = {}, list = [...new Set(ids.filter(Boolean))]; let i = 0;
+    async function worker() { while (i < list.length) { const id = list[i++];
+      try { const r = await (await gfetch(`${API}/files/${id}?fields=id,createdTime,modifiedTime`)).json(); out[id] = Date.parse(r.modifiedTime || r.createdTime) || 0; } catch (e) { } } }
+    await Promise.all(Array.from({ length: 6 }, worker));
+    return out;
+  }
+  window.appStore = { flush, applyInbox, missingFiles, fileTimes };
 })();

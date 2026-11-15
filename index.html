@@ -275,10 +275,10 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794766152";</script>
-<script src="config.js?v=1794766152"></script>
+<script>window.APP_VERSION = "1794766431";</script>
+<script src="config.js?v=1794766431"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794766152"></script>
+<script src="platform.js?v=1794766431"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1646,17 +1646,37 @@ function receiptUnits(p){
   u.forEach((x, i) => x.n = i + 1);
   return u;
 }
+/* المستند المدموج متغيّر إذا تغيّرت ملفاته منذ الدمج (src = معرّفات الملفات وقت الدمج) */
+const srcOf = x => x.parts.map(q => q[1]);
+const isStale = (x, df) => { const o = df[x.key]; return !!(o && o.src && o.src.join("|") !== srcOf(x).join("|")); };
+const needMerge = (x, df) => !df[x.key] || isStale(x, df);
+let legacyBusy = false;
+async function checkLegacy(p){
+  if(legacyBusy || !window.appStore || !window.appStore.fileTimes) return;
+  const units = receiptUnits(p), df = p.docFiles || {}, old = units.filter(x => df[x.key] && !df[x.key].src);
+  if(!old.length) return; legacyBusy = true;
+  try{
+    const t = await window.appStore.fileTimes(old.flatMap(x => [df[x.key].id, ...srcOf(x)]));
+    const upd = {};
+    old.forEach(x => { const o = df[x.key], tm = t[o.id]; if(!tm) return;
+      const changed = srcOf(x).some(id => (t[id] || 0) > tm + 1000);
+      upd[x.key] = {...o, src: changed ? ["?"] : srcOf(x)}; });
+    if(Object.keys(upd).length){ await db.doc("projects/" + p.code).update({docFiles: upd}); p.docFiles = {...df, ...upd}; render(); }
+  }finally{ legacyBusy = false; }
+}
 const docMismatch = (p, units) => { const map = Object.fromEntries(units.map(x => [x.key, x.n])); return Object.entries(p.docFiles || {}).filter(([k, o]) => map[k] && map[k] !== o.n); };
 
 function renderDocs(p, kind){
   const box = $(kind === "pay" ? "#docBoxPay" : "#docBoxEx"); if(!box) return;
   const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
   const st = docState[p.code + "__" + kind + month] || {}, units = receiptUnits(p), mine = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month)), bad = docMismatch(p, units), df = p.docFiles || {};
+  const todo = mine.filter(x => needMerge(x, df)), nStale = todo.filter(x => df[x.key]).length, nNew = todo.length - nStale;
+  setTimeout(() => checkLegacy(p).catch(() => {}));
   box.innerHTML = `<details class="settings panel" open><summary><span>دمج مستندات ${kind === "pay" ? "الموظفين" : "المصاريف"} — ${monLabel(month)}</span></summary>
-    <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}">دمج المستندات</button></div>
+    <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}" ${todo.length ? "" : "disabled"}>${todo.length ? `دمج ${[nNew ? `الجديد (${nNew})` : "", nStale ? `المتغيّر (${nStale})` : ""].filter(Boolean).join(" و")}` : "كل المستندات محدّثة"}</button></div>
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
-      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
     ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم. أعد الترقيم من تبويب «التقارير المالية» قبل الدمج.</p>` : ""}
     <div class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر، تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح، تُستخدم التنزيلات العادية.")} ${canPickDir() ? `<button type="button" class="ghost" data-pickdir="${kind}">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
@@ -1669,7 +1689,7 @@ function renderDocList(p){
     <div class="phead"><span class="msg" id="doc-msg-list" aria-live="polite"></span><button type="button" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button></div>
     <p class="code">إذا أُضيف إيصال أقدم من مستندات محفوظة، تتغير أرقامها. إعادة الترقيم تعيد تسمية ملفاتها في الدرايف والكمبيوتر.</p>
     ${units.length ? `<div class="tscroll"><table class="ptab" style="min-width:520px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>البند</th><th>المستند</th><th>المبلغ</th><th>الملف</th></tr></thead><tbody>
-      ${units.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td class="code">${esc(x.line)}</td><td>${esc(x.label)}</td><td class="code">${x.amount.toLocaleString("en-US")}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">رقم قديم</span>' : "") : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع بعد.</p>'}
+      ${units.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td class="code">${esc(x.line)}</td><td>${esc(x.label)}</td><td class="code">${x.amount.toLocaleString("en-US")}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">رقم قديم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر</span>' : "") : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع بعد.</p>'}
   </details>`;
 }
 
@@ -1723,8 +1743,10 @@ async function addA4(out, src, idx){
 
 async function buildDocs(say, kind){
   const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
-  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month));
-  if(!mine.length) throw {code: "tool_error", message: "لا توجد إيصالات دفع في هذه الفترة."};
+  const p = projects[current], units = receiptUnits(p), all = units.filter(x => x.key.startsWith(pre) && (month === "all" || x.month === month));
+  if(!all.length) throw {code: "tool_error", message: "لا توجد إيصالات دفع في هذه الفترة."};
+  const mine = all.filter(x => needMerge(x, p.docFiles || {}));
+  if(!mine.length){ say("كل المستندات محدّثة، لا شيء يحتاج دمجاً."); return 0; }
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» أولاً."};
   const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
@@ -1746,7 +1768,7 @@ async function buildDocs(say, kind){
     const old = docFiles[x.key];
     const up = await upload(new File([blob], name, {type: "application/pdf"}), root, String(x.n));
     if(old && old.id && old.id !== up.id) await trash(old.id).catch(() => {});
-    docFiles[x.key] = {id: up.id, n: x.n, at: today()};
+    docFiles[x.key] = {id: up.id, n: x.n, at: today(), src: srcOf(x)};
     if(local){ try{ await writeToDir(p.code, name, blob); }catch(e){ say("تعذّر الحفظ في مجلد الكمبيوتر: " + (e && e.message || e), true); } }
     else mergedBlobs[x.key] = {blob, name, label: String(x.n), skipped};
     out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
@@ -1754,6 +1776,7 @@ async function buildDocs(say, kind){
   await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
   docState[p.code + "__" + kind + month] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
   renderDocs(p, kind);
+  return mine.length;
 }
 
 const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/folders/${esc(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
@@ -1763,7 +1786,7 @@ async function monthAll(btn){
   curDocKind = btn.dataset.docmake;
   const say = (t, err) => { const m = docMsg(); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("الدمج: " + t, true); };
   btn.disabled = true; editing = true;
-  try{ await buildDocs(say, curDocKind); say("تم دمج المستندات."); }
+  try{ const n = await buildDocs(say, curDocKind); if(n) say(`تم دمج ${n} مستند.`); }
   catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
   btn.disabled = false; editing = false;
 }
@@ -2692,6 +2715,8 @@ function todoItems(p){
     items.push({w: 1, t: `عملية «${e.title || "بلا عنوان"}» ${nx ? "بانتظار " + (FORM_CODE[nx] || nx) : "بانتظار تحديد توثيقات فئتها"}`, tab: "exp", ex: e.key}); });
   const units = receiptUnits(p), df = p.docFiles || {}, un = units.filter(x => (m === "all" || x.month === m) && !df[x.key]);
   if(un.length) items.push({w: 1, t: `${un.length} مستند لم يُدمج`, tab: un.some(x => x.key.startsWith("pay:")) ? "staff" : "exp"});
+  const stl = units.filter(x => (m === "all" || x.month === m) && isStale(x, df));
+  if(stl.length) items.push({w: 1, t: `${stl.length} مستند تغيّرت ملفاته ويحتاج إعادة دمج`, tab: stl.some(x => x.key.startsWith("pay:")) ? "staff" : "exp"});
   const bad = docMismatch(p, units); if(bad.length) items.push({w: 1, t: `${bad.length} مستند يحتاج إعادة ترقيم`, tab: "docs"});
   if(m !== "all" && units.some(x => x.month === m) && !num(((p.expense || {}).eurRates || {})[m])) items.push({w: 1, t: "سعر صرف اليورو لهذا الشهر غير مُدخل", tab: "rep"});
   return items;
