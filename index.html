@@ -169,10 +169,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794746142";</script>
-<script src="config.js?v=1794746142"></script>
+<script>window.APP_VERSION = "1794746690";</script>
+<script src="config.js?v=1794746690"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794746142"></script>
+<script src="platform.js?v=1794746690"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -184,7 +184,9 @@ let db = null, mcp = null, fileArgs = false;
 let projects = {}, assignments = {}, people = {}, current = "", saving = false, dirty = false, editing = false;
 const extraSlots = {};
 let duties = {}, templates = {}, tplCache = null, excelCfg = {}, editPerson = "";
-let holidays = [], timesheets = {}, tsMonth = "", tsTpl = null, payrolls = {}, xTpl = {};
+const curYM = new Date().toISOString().slice(0, 7);
+let prMonth = curYM, exMonth = curYM, rpMonth = curYM, docMonth = curYM;
+let holidays = [], timesheets = {}, tsMonth = curYM, tsTpl = null, payrolls = {}, xTpl = {};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -920,26 +922,33 @@ const gridDays = el => el ? [...el.querySelectorAll(".dday.on")].map(b => +b.dat
 
 function parseDays(str, dim){ return [...new Set(String(str||"").split(/[,،\s]+/).map(Number).filter(n => n >= 1 && n <= dim))].sort((a,b)=>a-b); }
 
+function monthPick(sec, val, all){
+  const cy = +curYM.slice(0, 4), p = projects[current] || {}, sy = +((p.start || curYM).slice(0, 4)) || cy;
+  const years = []; for(let y = Math.min(sy, cy - 2); y <= cy + 1; y++) years.push(y);
+  const [vy, vm] = val === "all" ? [cy, 0] : val.split("-").map(Number);
+  return `<span class="inl mpick" data-sec="${sec}"><select data-mp="m" aria-label="الشهر" style="min-width:0">${all ? `<option value="0" ${val === "all" ? "selected" : ""}>الكل</option>` : ""}${MON_AR.map((n, i) => `<option value="${i + 1}" ${val !== "all" && vm === i + 1 ? "selected" : ""}>${n}</option>`).join("")}</select>
+    <select data-mp="y" aria-label="السنة" style="min-width:0" ${val === "all" ? "disabled" : ""}>${years.map(y => `<option ${y === vy ? "selected" : ""}>${y}</option>`).join("")}</select></span>`;
+}
+const monLabel = v => v === "all" ? "كل الأشهر" : `${MON_AR[+v.slice(5) - 1]} ${v.slice(0, 4)}`;
+
 function renderTimesheets(p){
   const box = $("#tsBox"); if(!box) return;
   const open = box.querySelector("details") && box.querySelector("details").open;
-  const months = projMonths(p);
-  if(!tsMonth || !months.includes(tsMonth)) tsMonth = months.find(m => m >= today().slice(0,7)) || months[months.length-1] || "";
   const cfg = tsCfg(p), doc = timesheets[p.code + "__" + tsMonth] || {}, leave = doc.leave || {}, files = doc.files || {};
   const [y, m] = tsMonth ? tsMonth.split("-").map(Number) : [0,0];
   const hol = holidays.filter(d => d.startsWith(tsMonth)).map(d => +d.slice(8));
   const rows = staffOf(p).map(({pos, v, id}) => `<tr data-tsid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
      <td>${dayGrid("lv-" + id, y, m, cfg.weekend, leave[id] || [], hol)}</td>
      <td>${files[id] ? dlink(files[id].pdf || files[id].xlsx, "PDF") + (files[id].xlsx ? " · " + dlink(files[id].xlsx, "Excel") : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("");
-  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>جداول الدوام الشهرية</summary>
+  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>جداول الدوام الشهرية — ${monLabel(tsMonth)}</summary>
     <div class="sgrid">
-      <div><label>الشهر</label><select id="ts-month">${months.map(mm => `<option value="${mm}" ${mm===tsMonth?"selected":""}>${MON_AR[+mm.slice(5)-1]} ${mm.slice(0,4)}</option>`).join("")}</select></div>
+      <div><label>الشهر</label>${monthPick("ts", tsMonth)}</div>
       <div><label>ساعات العمل اليومية</label><input id="ts-hours" type="number" min="1" max="12" value="${esc(cfg.hours)}"></div>
       <div><label>أيام العطلة الأسبوعية</label><div class="wk">${DAY_AR.map((d,i) => `<label class="chk"><input type="checkbox" name="wk" value="${i}" ${cfg.weekend.includes(i)?"checked":""}>${d}</label>`).join("")}</div></div>
     </div>
     <div class="hol"><label>العطل الرسمية في هذا الشهر — اضغط على اليوم</label>${tsMonth ? dayGrid("hol", y, m, cfg.weekend, hol) : ""}</div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>أيام الإجازة — اضغط على اليوم</th><th>الجدول</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="code">لا يوجد موظفون لهم عقود في هذا المشروع.</td></tr>'}</tbody></table></div>
-    <div class="row"><span id="ts-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="tsSave">حفظ الإجازات والعطل</button></span></div>
+    <div class="row"><span id="ts-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="tsSave">حفظ الإجازات والعطل</button> <button type="button" id="tsMakeBtn">إنشاء جداول الدوام</button></span></div>
   </details>`;
 }
 
@@ -1058,8 +1067,8 @@ function renderPayroll(p){
   const box = $("#prBox"); if(!box) return;
   const open = box.querySelector("details") && box.querySelector("details").open;
   const months = projMonths(p);
-  if(!tsMonth) return;
-  const s = p.signatories || {}, doc = payrolls[p.code + "__" + tsMonth] || {}, ded = doc.deductions || {}, f = doc.files || {};
+  if(!prMonth) return;
+  const s = p.signatories || {}, doc = payrolls[p.code + "__" + prMonth] || {}, ded = doc.deductions || {}, f = doc.files || {};
   const finPos = s.financePositionCode || "";
   const link = (o, l) => o ? dlink(o.pdf || o.xlsx, l) : "";
   const rows = staffOf(p).map(({pos, v, id}) => { const d = ded[id] || {}; return `<tr data-prid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
@@ -1068,19 +1077,19 @@ function renderPayroll(p){
       <td><input name="loan" type="number" min="0" value="${esc(d.loan||"")}" aria-label="قرض"></td>
       <td><input name="pnote" value="${esc(d.notes||"")}" aria-label="ملاحظات"></td>
       <td>${link((f.vouchers||{})[id], "الإيصال") || '<span class="code">—</span>'}</td></tr>`; }).join("");
-  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>الرواتب الشهرية — ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
-    <p class="code">الشهر نفسه المختار في جداول الدوام. الإجازات في الإيصال تُؤخذ من جدول الدوام.</p>
+  box.innerHTML = `<details class="settings" ${open || !box.innerHTML ? "open" : ""}><summary>الرواتب الشهرية — ${MON_AR[+prMonth.slice(5)-1]} ${prMonth.slice(0,4)}</summary>
+    <div class="sgrid"><div><label>الشهر</label>${monthPick("pr", prMonth)}</div></div><p class="code">الإجازات في الإيصال تُؤخذ من جدول دوام الشهر نفسه.</p>
     <div class="sgrid">
       <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
     </div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>الراتب</th><th>سلفة</th><th>قرض</th><th>ملاحظات</th><th>الإيصال</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="code">لا يوجد موظفون لهم عقود.</td></tr>'}</tbody></table></div>
     <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel") : "") : ""}</span>
-      <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button></span></div>
+      <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button> <button type="button" id="prMakeBtn">إنشاء الرواتب والإيصالات</button></span></div>
   </details>`;
 }
 
 async function prSaveInputs(){
-  const p = projects[current], key = p.code + "__" + tsMonth;
+  const p = projects[current], key = p.code + "__" + prMonth;
   const deductions = {};
   document.querySelectorAll("tr[data-prid]").forEach(tr => {
     const q = n => tr.querySelector(`[name="${n}"]`).value.trim();
@@ -1089,7 +1098,7 @@ async function prSaveInputs(){
   });
   await db.doc("projects/" + p.code).update({signatories: {...(p.signatories || {}), financePositionCode: $("#pr-fin").value}});
   const prev = payrolls[key] || {};
-  await db.doc("payroll/" + key).set({...prev, project: p.code, month: tsMonth, deductions});
+  await db.doc("payroll/" + key).set({...prev, project: p.code, month: prMonth, deductions});
   return {deductions, prev, finPos: $("#pr-fin").value};
 }
 
@@ -1126,12 +1135,12 @@ async function trashSet(o){ if(o){ await trash(o.xlsx); if(o.pdf) await trash(o.
 
 function rep(x, map){ for(const [k, v] of Object.entries(map)) x = x.split("{{" + k + "}}").join(xmlEsc(v)); return x; }
 
-async function monthFolder(p){
-  let folder = (p.monthFolders || {})[tsMonth];
+async function monthFolder(p, ym = tsMonth){
+  let folder = (p.monthFolders || {})[ym];
   if(!folder){
-    const fr = await mcp.callTool("Google Drive", "create_file", {title: tsMonth, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
+    const fr = await mcp.callTool("Google Drive", "create_file", {title: ym, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
     folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
-    await db.doc("projects/" + p.code).update({monthFolders: {[tsMonth]: folder}});
+    await db.doc("projects/" + p.code).update({monthFolders: {[ym]: folder}});
   }
   return folder;
 }
@@ -1145,11 +1154,11 @@ async function prMake(btn){
   try{
     say("جارٍ الحفظ…");
     const inp = await prSaveInputs();
-    const [y, m] = tsMonth.split("-").map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const [y, m] = prMonth.split("-").map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const date = ddmmyyyy(y, m, dim), cur = c.currency;
     const pm = personByPos(p, (p.signatories || {}).pmPositionCode), fin = personByPos(p, inp.finPos);
-    const ts = timesheets[p.code + "__" + tsMonth] || {};
-    const folder = await monthFolder(p);
+    const ts = timesheets[p.code + "__" + prMonth] || {};
+    const folder = await monthFolder(p, prMonth);
     const files = {...(inp.prev.files || {})}; files.vouchers = {...(files.vouchers || {})};
     // جدول الرواتب
     say("جارٍ إنشاء جدول الرواتب…");
@@ -1162,7 +1171,7 @@ async function prMake(btn){
                       : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, I: null};
       for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
     }
-    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${tsMonth}`, false, [24, 9]);
+    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, false, [24, 9]);
     await trashSet(files.payroll); files.payroll = pf;
     // الإيصالات والفواتير
     const vt = await loadX(templates.voucher);
@@ -1171,14 +1180,14 @@ async function prMake(btn){
       n++; say(`جارٍ إنشاء إيصال ${v.name} (${n}/${staff.length})…`);
       const d = inp.deductions[id] || {}, sal = Number(pos.salary) || 0, net = sal - (d.adv || 0) - (d.loan || 0);
       const title = gw(v.gender, pos.title_m, pos.title_f), lv = ((ts.leave || {})[id] || []).length;
-      let vx = rep(vt.xml, {DATE: date, NO: `${tsMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
+      let vx = rep(vt.xml, {DATE: date, NO: `${prMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
-      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${tsMonth} - ${base}`, true, [0, 1, 37, 13], 2);
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, true, [0, 1, 37, 13], 2);
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
     }
-    await db.doc("payroll/" + p.code + "__" + tsMonth).update({files});
+    await db.doc("payroll/" + p.code + "__" + prMonth).update({files});
     say("تم إنشاء الرواتب."); return true;
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
 }
@@ -1330,17 +1339,17 @@ function receiptUnits(p){
 const docMismatch = (p, units) => { const map = Object.fromEntries(units.map(x => [x.key, x.n])); return Object.entries(p.docFiles || {}).filter(([k, o]) => map[k] && map[k] !== o.n); };
 
 function renderDocs(p){
-  const box = $("#docBox"); if(!box || !tsMonth) return;
-  const st = docState[p.code + "__" + tsMonth] || {}, units = receiptUnits(p), mine = units.filter(x => x.month === tsMonth), bad = docMismatch(p, units), df = p.docFiles || {};
+  const box = $("#docBox"); if(!box) return;
+  const st = docState[p.code + "__" + docMonth] || {}, units = receiptUnits(p), mine = units.filter(x => docMonth === "all" || x.month === docMonth), bad = docMismatch(p, units), df = p.docFiles || {};
   box.innerHTML = `<div class="settings" style="display:grid;gap:10px">
-    <strong>توثيقات ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</strong>
+    <div class="row"><strong>توثيقات ${monLabel(docMonth)}</strong>${monthPick("doc", docMonth, true)}</div>
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال، من الأقدم)، وهو نفسه Item number في التقرير المالي. يُحفظ في الدرايف (مجلد ${DOC_ROOT}) ونسخة في مجلد الكمبيوتر داخل مجلد باسم المشروع.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>التاريخ</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
       ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذا الشهر.</p>'}
     ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم بسبب إضافة إيصال أقدم. اضغط «إعادة الترقيم» قبل إنشاء توثيقات جديدة.</p>` : ""}
     <div class="row"><span class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر — تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح — تُستخدم التنزيلات العادية.")}</span>${canPickDir() ? `<button type="button" class="ghost" id="pickDir">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
-    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button> <button type="button" id="monthAll">إنشاء توثيقات الشهر</button></span></div>
+    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button> <button type="button" id="monthAll">إنشاء التوثيقات</button></span></div>
   </div>`;
 }
 
@@ -1371,7 +1380,7 @@ async function renumberDocs(say){
 }
 
 async function buildDocs(say){
-  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => x.month === tsMonth);
+  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => docMonth === "all" || x.month === docMonth);
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» أولاً."};
   const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
@@ -1397,7 +1406,7 @@ async function buildDocs(say){
     out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
   }
   await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
-  docState[p.code + "__" + tsMonth] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
+  docState[p.code + "__" + docMonth] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
   renderDocs(p);
 }
 
@@ -1407,16 +1416,9 @@ async function monthAll(btn){
   if(dirHandle) await dirPerm(true);
   const say = (t, err) => { const m = $("#doc-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("التوثيقات: " + t, true); };
   btn.disabled = true; editing = true;
-  try{
-    say("1/3 جداول الدوام…");
-    if(!await tsMake(btn)) throw {code:"tool_error", message:"توقف العمل عند جداول الدوام."};
-    say("2/3 الرواتب والإيصالات…");
-    if(!await prMake(btn)) throw {code:"tool_error", message:"توقف العمل عند الرواتب."};
-    say("3/3 تجميع التوثيقات…");
-    await buildDocs(say);
-    say("تم إنشاء توثيقات الشهر.");
-  }catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
-  btn.disabled = false; editing = false; setTimeout(() => render(true), 800);
+  try{ await buildDocs(say); say("تم إنشاء التوثيقات."); }
+  catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
+  btn.disabled = false; editing = false;
 }
 
 /* ===== الإعدادات ===== */
@@ -1707,13 +1709,14 @@ function nextNum(p, type){
 const signer = (p, k) => (((p.expense || {}).signers || {})[k]) || {name: "", title: ""};
 
 function renderExpenses(p){
-  const box = $("#exBox"); if(!box || !tsMonth) return;
+  const box = $("#exBox"); if(!box) return;
   const list = exOf(p);
-  const inMonth = list.filter(e => e.month === tsMonth), open = list.filter(e => !e.done && e.month !== tsMonth), other = list.filter(e => e.done && e.month !== tsMonth).sort((a, b) => (b.month || "").localeCompare(a.month || ""));
+  const all = exMonth === "all", inMonth = list.filter(e => all || e.month === exMonth).sort((a, b) => (b.month || "").localeCompare(a.month || "")), open = all ? [] : list.filter(e => !e.done && e.month !== exMonth), other = all ? [] : list.filter(e => e.done && e.month !== exMonth).sort((a, b) => (b.month || "").localeCompare(a.month || ""));
   const lines = (p.positions || []).filter(x => !isStaff(x));
-  box.innerHTML = `<details class="settings" open><summary>المصاريف — ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
+  box.innerHTML = `<details class="settings" open><summary>المصاريف — ${monLabel(exMonth)}</summary>
+    <div class="sgrid"><div><label>الشهر</label>${monthPick("ex", exMonth, true)}</div></div>
     <p class="code">شهر العملية هو شهر تاريخ الإيصال. العمليات غير المكتملة تظهر في كل الأشهر حتى تُنشأ إيصالاتها.</p>
-    ${inMonth.length ? `<div style="display:grid;gap:10px">${inMonth.map(e => exCard(p, e)).join("")}</div>` : '<p class="empty">لا توجد مصاريف في هذا الشهر.</p>'}
+    ${inMonth.length ? `<div style="display:grid;gap:10px">${inMonth.map(e => exCard(p, e)).join("")}</div>` : '<p class="empty">لا توجد مصاريف.</p>'}
     ${open.length ? `<h3>قيد التنفيذ</h3><div style="display:grid;gap:10px">${open.map(e => exCard(p, e)).join("")}</div>` : ""}
     ${other.length ? `<details class="duties"><summary>عمليات مكتملة في أشهر أخرى (${other.length})</summary><div style="display:grid;gap:10px;margin-top:8px">${other.map(e => exCard(p, e)).join("")}</div></details>` : ""}
     <details class="addline" id="exAdd"><summary>+ عملية صرف</summary>
@@ -1980,7 +1983,7 @@ async function exClick(t){
     const box = t.closest("#exAdd"), line = F(box, "exline").value, title = F(box, "extitle").value.trim();
     const id = Date.now().toString(36), key = p.code + "__" + id;
     const pos = (p.positions || []).find(x => pid(x) === line) || {};
-    const e = {project: p.code, id, line: line === "__other" ? "" : line, cat: line === "__other" ? F(box, "excat").value : "", title: title || pos.purpose || pos.title || "", mode: "stage", month: tsMonth, created: today(),
+    const e = {project: p.code, id, line: line === "__other" ? "" : line, cat: line === "__other" ? F(box, "excat").value : "", title: title || pos.purpose || pos.title || "", mode: "stage", month: exMonth === "all" ? curYM : exMonth, created: today(),
       items: pos.code ? [{d: pos.purpose || pos.title, u: pos.unitName || "", q: pos.count || "", dur: 1, p: pos.salary || "", sp: "", n: "", cm: ""}] : [],
       f: {cDuties: (duties[pos.duties] || []).join("\n")}};
     try{ await db.doc("expenses/" + key).set(e); exOpen.add(key); editing = false; render(true); }catch(_){ say("تعذّرت الإضافة.", true); }
@@ -2066,10 +2069,11 @@ function txList(p, upto){
 }
 
 function renderReport(p){
-  const box = $("#repBox"); if(!box || !tsMonth) return;
-  const ex = p.expense || {}, rates = ex.eurRates || {}, months = projMonthList(p, tsMonth), last = (ex.reports || {})[tsMonth];
-  const tx = txList(p, tsMonth), missing = [...new Set(tx.map(t => t.month))].filter(m => !num(rates[m]));
-  box.innerHTML = `<details class="settings"><summary>التقرير المالي للمانح — تراكمي حتى نهاية ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</summary>
+  const box = $("#repBox"); if(!box) return;
+  const ex = p.expense || {}, rates = ex.eurRates || {}, months = projMonthList(p, rpMonth), last = (ex.reports || {})[rpMonth];
+  const tx = txList(p, rpMonth), missing = [...new Set(tx.map(t => t.month))].filter(m => !num(rates[m]));
+  box.innerHTML = `<details class="settings"><summary>التقرير المالي للمانح — تراكمي حتى نهاية ${monLabel(rpMonth)}</summary>
+    <div class="sgrid"><div><label>حتى نهاية شهر</label>${monthPick("rp", rpMonth)}</div></div>
     <p class="code">يُملأ سجل الصرف (Transactions1) والملخص من إيصالات الرواتب وإيصالات المصاريف حتى نهاية الشهر المختار. الوصف من أسماء البنود بالإنجليزية في الموازنة. طريقة الدفع: نقدي (C).</p>
     <h3>سعر صرف اليورو لكل شهر (من InforEuro: كم ${esc(ex.currency || (p.contract || {}).currency || "ليرة")} لكل 1 يورو)</h3>
     <div class="sgrid">${months.map(m => `<div><label>${MON_AR[+m.slice(5)-1]} ${m.slice(0,4)}</label><input type="number" min="0" step="any" data-rate="${m}" value="${esc(rates[m] ?? "")}"></div>`).join("")}</div>
@@ -2098,7 +2102,7 @@ async function rpMake(say){
   if(!mcp){ say("الوصول إلى Google Drive غير متاح في هذا العرض.", true); return; }
   try{
     say("جارٍ الحفظ…");
-    const ex = await rpSave(), tx = txList(p, tsMonth);
+    const ex = await rpSave(), tx = txList(p, rpMonth);
     if(!tx.length){ say("لا توجد إيصالات حتى نهاية هذا الشهر.", true); return; }
     const missing = [...new Set(tx.map(t => t.month))].filter(m => !num((ex.eurRates || {})[m]));
     if(missing.length){ say("أدخل سعر صرف اليورو للأشهر: " + missing.join("، "), true); return; }
@@ -2130,7 +2134,7 @@ async function rpMake(say){
     zip.file(fTx, x);
     // الملخص
     let s = await zip.file(fSum).async("string");
-    const end = monthEnd(tsMonth), lines = (p.positions || []), grand = lines.reduce((t, pos) => t + lineTotal(p, pos), 0);
+    const end = monthEnd(rpMonth), lines = (p.positions || []), grand = lines.reduce((t, pos) => t + lineTotal(p, pos), 0);
     s = setCell(setCell(setCell(setCell(s, "E5", ex.orgEn || ""), "E7", p.name || p.code), "E9", `${dmy(p.start)} - ${dmy(end)}`), "E11", avg);
     const byLine = {}; tx.forEach(t => { byLine[t.line] = (byLine[t.line] || 0) + t.eur; });
     for(const [code, r] of Object.entries(SUM_ROWS)){
@@ -2150,10 +2154,10 @@ async function rpMake(say){
     const blob = await zip.generateAsync({type: "blob", mimeType: XT, compression: "DEFLATE", compressionOptions: {level: 9}});
     say("جارٍ الحفظ في الدرايف…");
     const folder = await ensureFolder("التقارير المالية", (p.folders || {}).project, "reports", p);
-    const base = `Financial Report - ${p.code} - ${tsMonth}`;
+    const base = `Financial Report - ${p.code} - ${rpMonth}`;
     const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
-    const old = (ex.reports || {})[tsMonth]; if(old) await trashSet(old).catch(() => {});
-    await db.doc("projects/" + p.code).update({expense: {...ex, reports: {...(ex.reports || {}), [tsMonth]: {xlsx: xu.id, at: today()}}}});
+    const old = (ex.reports || {})[rpMonth]; if(old) await trashSet(old).catch(() => {});
+    await db.doc("projects/" + p.code).update({expense: {...ex, reports: {...(ex.reports || {}), [rpMonth]: {xlsx: xu.id, at: today()}}}});
     editing = false; render(true);
     const m = $("#rp-msg"); if(m){ m.className = "msg ok"; m.textContent = `تم إنشاء التقرير (${tx.length} حركة).`; }
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); }
@@ -2176,7 +2180,10 @@ checkVersion(); setInterval(checkVersion, 5 * 60 * 1000);
 $("#project").addEventListener("change", e => { current = e.target.value; render(true); });
 document.getElementById("saveAll").addEventListener("click", saveAll);
 document.addEventListener("change", e => {
-  if(e.target.id === "ts-month"){ tsMonth = e.target.value; editing = false; render(true); return; }
+  if(e.target.dataset && e.target.dataset.mp){ const w = e.target.closest(".mpick"), m = +w.querySelector('[data-mp="m"]').value, y = w.querySelector('[data-mp="y"]').value;
+    const v = m ? `${y}-${String(m).padStart(2, "0")}` : "all";
+    ({ts: () => tsMonth = v, pr: () => prMonth = v, ex: () => exMonth = v, rp: () => rpMonth = v, doc: () => docMonth = v})[w.dataset.sec]();
+    editing = false; render(true); return; }
   if(e.target.name === "wk"){
     const wk = [...document.querySelectorAll('input[name="wk"]:checked')].map(i => +i.value);
     document.querySelectorAll("#tsBox .dday").forEach(b => { const wd = DAY_AR.indexOf((b.title || "").split(" ")[0]); const isW = wk.includes(wd);
@@ -2223,6 +2230,7 @@ document.addEventListener("click", e => {
   else if(t.id === "monthAll") monthAll(t);
   else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
   else if(t.id === "pickDir") pickDir();
+  else if(t.id === "tsMakeBtn" || t.id === "prMakeBtn"){ t.disabled = true; editing = true; (t.id === "tsMakeBtn" ? tsMake(t) : prMake(t)).finally(() => { t.disabled = false; editing = false; setTimeout(() => render(true), 600); }); }
   else if(t.id === "renumber"){ const m = $("#doc-msg"); renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.dataset.dl){ const m = $("#doc-msg"); saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.dataset.dlall !== undefined){ const m = $("#doc-msg"); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
