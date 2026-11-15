@@ -169,10 +169,10 @@ details.excard[open]{gap:12px}
     <div id="actBox"></div>
   </section>
 </div>
-<script>window.APP_VERSION = "1794707644";</script>
-<script src="config.js?v=1794707644"></script>
+<script>window.APP_VERSION = "1794746142";</script>
+<script src="config.js?v=1794746142"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="platform.js?v=1794707644"></script>
+<script src="platform.js?v=1794746142"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
@@ -1217,8 +1217,8 @@ async function saveMerged(ids, say){
   if(dirHandle && await dirPerm(true)){
     let ok = 0;
     for(const id of ids){ const m = mergedBlobs[id]; if(!m) continue; say(`جارٍ حفظ ملف ${m.label} في ${dirHandle.name}…`);
-      try{ await writeToDir(tsMonth, m.name, m.blob); ok++; }catch(e){ say("تعذّر الحفظ في المجلد: " + (e && e.message || e), true); break; } }
-    if(ok){ say(`تم حفظ ${ok} ملف في ${dirHandle.name} ← ${tsMonth}.`); return; }
+      try{ await writeToDir(projects[current].code, m.name, m.blob); ok++; }catch(e){ say("تعذّر الحفظ في المجلد: " + (e && e.message || e), true); break; } }
+    if(ok){ say(`تم حفظ ${ok} ملف في ${dirHandle.name} ← ${projects[current].code}.`); return; }
   }
   dlNs = dlNs || await claude.use("downloads");
   if(!dlNs){ say("التنزيل غير متاح في هذا العرض.", true); return; }
@@ -1232,27 +1232,6 @@ async function saveMerged(ids, say){
   }
   say(`تم حفظ ${ok} ملف على الكمبيوتر.`);
 }
-
-function renderDocs(p){
-  const box = $("#docBox"); if(!box || !tsMonth) return;
-  const c = docCfg(p), st = docState[p.code + "__" + tsMonth] || {};
-  box.innerHTML = `<div class="settings" style="display:grid;gap:10px">
-    <strong>تجميع توثيقات ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</strong>
-    <div class="sgrid">
-      <div><label>طريقة التجميع</label><select id="doc-mode">
-        <option value="monthly" ${c.mode!=="separate"?"selected":""}>ملف PDF مدمج لكل موظف — يُحفظ على الكمبيوتر</option>
-        <option value="separate" ${c.mode==="separate"?"selected":""}>كل ملف PDF لوحده — مجلد لكل موظف على الدرايف</option>
-      </select></div>
-      <div style="grid-column:span 2"><label>تسمية التوثيق (الملف المدمج، أو مجلد الملفات المنفصلة)</label><input id="doc-pat" value="${esc(c.pattern)}"></div>
-    </div>
-    <p class="code">المتغيرات المتاحة في التسمية: {الشهر} {البند} {الاسم} {الاسم_EN} {المشروع}. مثال الناتج: ${esc(docName(c.pattern, {month: tsMonth, code: "1.2", en: "Samer Khalil", ar: "سامر وليد خليل", project: p.code}))}</p>
-    <p class="code">${c.mode === "separate" ? "الحفظ في الدرايف: مجلد المشروع ← " + DOC_ROOT + " ← الشهر." : "الملفات المدمجة تُنزَّل على جهازك، ويُطلب منك تأكيد حفظ كل ملف."} ترتيب الملفات: إيصال الراتب، جدول الرواتب، جدول الدوام، العقد، الهوية، السيرة الذاتية، ثم المستندات الأخرى.</p>
-    ${c.mode !== "separate" ? `<div class="row"><span class="current">${dirHandle ? "مجلد الحفظ: <strong>" + esc(dirHandle.name) + "</strong> (تُنشأ داخله مجلدات الأشهر)" : (canPickDir() ? "لم يُحدد مجلد — تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح — تُستخدم التنزيلات العادية.")}</span>${canPickDir() ? `<button type="button" class="ghost" id="pickDir">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>` : ""}
-    ${st.links ? `<div class="current">${st.links}</div>` : ""}
-    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="docSave">حفظ</button> <button type="button" id="monthAll">إنشاء توثيقات الشهر</button></span></div>
-  </div>`;
-}
-
 
 /* ضغط الملفات الممسوحة ضوئياً */
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -1326,63 +1305,106 @@ async function ensureFolder(title, parent, cacheKey, p){
   return id;
 }
 
-async function buildDocs(say){
-  const p = projects[current], c = {mode: $("#doc-mode").value, pattern: $("#doc-pat").value.trim() || DOC_PAT};
-  await db.doc("projects/" + p.code).update({docs: c});
-  const pr = (await db.doc("payroll/" + p.code + "__" + tsMonth).get()).data() || {};
-  const ts = (await db.doc("timesheets/" + p.code + "__" + tsMonth).get()).data() || {};
-  const pf = pr.files || {}, tf = ts.files || {};
-  let target = null;
-  if(c.mode === "separate"){ const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p); target = await ensureFolder(tsMonth, root, "m:" + tsMonth, p); }
-  else { for(const k in mergedBlobs) delete mergedBlobs[k]; }
-  const out = [];
-  let n = 0;
-  const units = staffOf(p).map(({pos, v, id, a}) => {
-    const contract = contractDoc(a);
-    const others = (v.docs || []).concat((a.docs || []).filter(d => d.type !== "عقد العمل"));
-    const parts = [
-      ["إيصال الراتب", ((pf.vouchers || {})[id] || {}).pdf], ["جدول الرواتب", (pf.payroll || {}).pdf], ["جدول الدوام", (tf[id] || {}).pdf],
-      ["العقد", contract && contract.fileId], ["الهوية", v.idFileId], ["السيرة الذاتية", v.cvFileId]
-    ].concat(others.map(d => [d.type, d.fileId])).filter(x => x[1]);
-    return {id, v, parts, label: `${pos.code} - ${v.nameEn || v.name}`, docTitle: docName(c.pattern, {month: tsMonth, code: pos.code, en: v.nameEn || v.name, ar: v.name, project: p.code})};
-  }).concat(exOf(p).filter(e => e.month === tsMonth).map(e => {
-    const line = (p.positions || []).find(x => pid(x) === e.line), code = line ? line.code : "مصروف", t = e.title || e.id;
-    return {id: "ex:" + e.id, v: {name: t}, parts: exParts(p, e), label: `${code} - ${t}`, docTitle: docName(c.pattern, {month: tsMonth, code, en: t, ar: t, project: p.code})};
-  }).filter(u => u.parts.length));
-  for(const {id, v, parts, label, docTitle} of units){
-    n++;
-    if(c.mode === "separate"){
-      const sub = await ensureFolder(docTitle, target, "s:" + tsMonth + ":" + id + ":" + docTitle, p);
-      let k = 0;
-      for(const [t, fid] of parts){
-        k++; say(`جارٍ نسخ ملفات ${v.name} (${k}/${parts.length})…`);
-        await mcp.callTool("Google Drive", "copy_file", {fileId: fid, parentId: sub, title: `${String(k).padStart(2,"0")} - ${t} - ${label}`});
-      }
-      out.push(dlinkFolder(sub, v.name));
-      continue;
-    }
-    const merged = await PDFLib.PDFDocument.create(); const skipped = [];
-    let k = 0;
-    for(const [t, fid] of parts){
-      k++; say(`جارٍ دمج ملفات ${v.name} (${n}/${units.length}) — ${t}…`);
-      try{
-        const bytes = await toPdfBytes(fid, target || (p.folders || {}).project);
-        if(!bytes){ skipped.push(t); continue; }
-        const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true});
-        (await merged.copyPages(src, src.getPageIndices())).forEach(pg => merged.addPage(pg));
-      }catch(e){ skipped.push(t); }
-    }
-    const blob = new Blob([await merged.save()], {type: "application/pdf"});
-    mergedBlobs[id] = {blob, name: docTitle + ".pdf", label: v.name, skipped};
-    out.push(`<button type="button" class="ghost" data-dl="${esc(id)}">تنزيل ${esc(v.name)}</button>` + (skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""));
-  }
-  docState[p.code + "__" + tsMonth] = {links: (c.mode === "separate" ? "المجلدات: " : "") + out.join(" ") + (c.mode !== "separate" && out.length > 1 ? ` <button type="button" data-dlall>تنزيل الكل</button>` : "")};
-  if(c.mode !== "separate"){ renderDocs(p); await saveMerged(Object.keys(mergedBlobs), say); }
+/* المستندات المرقّمة: كل إيصال دفع مع مرفقاته = مستند واحد، يُرقَّم تسلسلياً حسب تاريخ الإيصال */
+function receiptUnits(p){
+  const u = [], pos0 = id => (p.positions || []).find(x => pid(x) === id);
+  Object.entries(payrolls).filter(([k, d]) => k.startsWith(p.code + "__") && d.month).forEach(([k, d]) => {
+    const [y, m] = d.month.split("-").map(Number), pf = d.files || {}, tf = (timesheets[p.code + "__" + d.month] || {}).files || {};
+    Object.keys(pf.vouchers || {}).forEach(id => {
+      const pos = pos0(id); if(!pos) return;
+      const a = assignments[p.code + "__" + id], v = a && people[a.personKey], contract = contractDoc(a);
+      const others = v ? (v.docs || []).concat(((a && a.docs) || []).filter(x => x.type !== "عقد العمل")) : [];
+      const parts = [["إيصال الراتب", (pf.vouchers[id] || {}).pdf], ["جدول الرواتب", (pf.payroll || {}).pdf], ["جدول الدوام", (tf[id] || {}).pdf],
+        ["العقد", contract && contract.fileId], ["الهوية", v && v.idFileId], ["السيرة الذاتية", v && v.cvFileId]].concat(others.map(x => [x.type, x.fileId])).filter(x => x[1]);
+      u.push({key: `pay:${d.month}:${id}`, date: monthEnd(d.month), month: d.month, line: pos.code, desc: `${pos.titleEn || pos.title} salary - ${MON_EN[m - 1]} ${y}`, amount: num(pos.salary), label: `${pos.code} - ${v ? v.name : pos.title}`, parts});
+    });
+  });
+  exOf(p).filter(e => (e.files || {}).RCPT && (e.f || {}).rcptDate).forEach(e => {
+    const pos = pos0(e.line) || {};
+    u.push({key: "ex:" + e.id, date: e.f.rcptDate, month: e.f.rcptDate.slice(0, 7), line: pos.code || "", desc: e.descEn || pos.titleEn || e.title, amount: exTotals(e, true).total, label: `${pos.code ? pos.code + " - " : ""}${e.title}`, parts: exParts(p, e)});
+  });
+  u.sort((a, b) => a.date.localeCompare(b.date) || a.line.localeCompare(b.line, undefined, {numeric: true}) || a.key.localeCompare(b.key));
+  u.forEach((x, i) => x.n = i + 1);
+  return u;
 }
+const docMismatch = (p, units) => { const map = Object.fromEntries(units.map(x => [x.key, x.n])); return Object.entries(p.docFiles || {}).filter(([k, o]) => map[k] && map[k] !== o.n); };
+
+function renderDocs(p){
+  const box = $("#docBox"); if(!box || !tsMonth) return;
+  const st = docState[p.code + "__" + tsMonth] || {}, units = receiptUnits(p), mine = units.filter(x => x.month === tsMonth), bad = docMismatch(p, units), df = p.docFiles || {};
+  box.innerHTML = `<div class="settings" style="display:grid;gap:10px">
+    <strong>توثيقات ${MON_AR[+tsMonth.slice(5)-1]} ${tsMonth.slice(0,4)}</strong>
+    <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال، من الأقدم)، وهو نفسه Item number في التقرير المالي. يُحفظ في الدرايف (مجلد ${DOC_ROOT}) ونسخة في مجلد الكمبيوتر داخل مجلد باسم المشروع.</p>
+    ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>التاريخ</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذا الشهر.</p>'}
+    ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم بسبب إضافة إيصال أقدم. اضغط «إعادة الترقيم» قبل إنشاء توثيقات جديدة.</p>` : ""}
+    <div class="row"><span class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر — تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح — تُستخدم التنزيلات العادية.")}</span>${canPickDir() ? `<button type="button" class="ghost" id="pickDir">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
+    ${st.links ? `<div class="current">${st.links}</div>` : ""}
+    <div class="row"><span id="doc-msg" class="msg" aria-live="polite"></span><span><button type="button" class="ghost" id="renumber" ${bad.length ? "" : "disabled"}>إعادة الترقيم${bad.length ? ` (${bad.length})` : ""}</button> <button type="button" id="monthAll">إنشاء توثيقات الشهر</button></span></div>
+  </div>`;
+}
+
+async function renameLocal(sub, from, to){
+  const d = await dirHandle.getDirectoryHandle(sub, {create: true});
+  let fh; try{ fh = await d.getFileHandle(from); }catch(_){ return false; }
+  await writeToDir(sub, to, await fh.getFile()); await d.removeEntry(from); return true;
+}
+
+async function renumberDocs(say){
+  const p = projects[current], units = receiptUnits(p), bad = docMismatch(p, units), map = Object.fromEntries(units.map(x => [x.key, x.n]));
+  if(!bad.length){ say("الترقيم مطابق."); return; }
+  if(!mcp){ say("الوصول إلى Google Drive غير متاح في هذا العرض.", true); return; }
+  const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})};
+  try{
+    if(local) for(const [k, o] of bad){ say(`تحضير ${o.n}.pdf…`); await renameLocal(p.code, `${o.n}.pdf`, `tmp-${k.replace(/[:]/g, "_")}.pdf`).catch(() => {}); }
+    let i = 0;
+    for(const [k, o] of bad){
+      i++; const n = map[k]; say(`إعادة تسمية ${o.n} ← ${n} (${i}/${bad.length})…`);
+      await mcp.callTool("Google Drive", "update_file", {fileId: o.id, title: `${n}.pdf`});
+      if(local) await renameLocal(p.code, `tmp-${k.replace(/[:]/g, "_")}.pdf`, `${n}.pdf`).catch(() => {});
+      docFiles[k] = {...o, n};
+    }
+    await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
+    editing = false; render(true);
+    const m = $("#doc-msg"); if(m){ m.className = "msg ok"; m.textContent = `تمت إعادة ترقيم ${bad.length} مستند${local ? " في الدرايف والكمبيوتر" : " في الدرايف (لم يُحدد مجلد على الكمبيوتر)"}.`; }
+  }catch(e){ await db.doc("projects/" + p.code).update({docFiles}).catch(() => {}); say(mcpMessage(e), true); }
+}
+
+async function buildDocs(say){
+  const p = projects[current], units = receiptUnits(p), mine = units.filter(x => x.month === tsMonth);
+  if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» أولاً."};
+  const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
+  const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
+  for(const k in mergedBlobs) delete mergedBlobs[k];
+  let n = 0;
+  for(const x of mine){
+    n++;
+    const merged = await PDFLib.PDFDocument.create(), skipped = [];
+    for(const [t, fid] of x.parts){
+      say(`جارٍ دمج المستند ${x.n} (${n}/${mine.length}) — ${t}…`);
+      try{ const bytes = await toPdfBytes(fid, root); if(!bytes){ skipped.push(t); continue; }
+        const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true}); (await merged.copyPages(src, src.getPageIndices())).forEach(pg => merged.addPage(pg)); }
+      catch(e){ skipped.push(t); }
+    }
+    const blob = new Blob([await merged.save()], {type: "application/pdf"}), name = `${x.n}.pdf`;
+    say(`جارٍ حفظ ${name} في الدرايف…`);
+    const old = docFiles[x.key];
+    const up = await upload(new File([blob], name, {type: "application/pdf"}), root, String(x.n));
+    if(old && old.id && old.id !== up.id) await trash(old.id).catch(() => {});
+    docFiles[x.key] = {id: up.id, n: x.n, at: today()};
+    if(local){ try{ await writeToDir(p.code, name, blob); }catch(e){ say("تعذّر الحفظ في مجلد الكمبيوتر: " + (e && e.message || e), true); } }
+    else mergedBlobs[x.key] = {blob, name, label: String(x.n), skipped};
+    out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
+  }
+  await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
+  docState[p.code + "__" + tsMonth] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
+  renderDocs(p);
+}
+
 const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/folders/${esc(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 
 async function monthAll(btn){
-  if(dirHandle && (projects[current].docs || {}).mode !== "separate") await dirPerm(true);
+  if(dirHandle) await dirPerm(true);
   const say = (t, err) => { const m = $("#doc-msg"); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("التوثيقات: " + t, true); };
   btn.disabled = true; editing = true;
   try{
@@ -2039,17 +2061,8 @@ function projMonthList(p, upto){ const out = []; let [y, m] = (p.start || upto +
 const lineTotal = (p, pos) => num(pos.salary) * (num(pos.count) || (isStaff(pos) ? num((p.contract || {}).months) : 1) || 1);
 
 function txList(p, upto){
-  const end = monthEnd(upto), tx = [];
-  Object.entries(payrolls).filter(([k, d]) => k.startsWith(p.code + "__") && d.month && d.month <= upto).forEach(([k, d]) => {
-    const [y, m] = d.month.split("-").map(Number);
-    Object.keys((d.files || {}).vouchers || {}).forEach(id => { const pos = (p.positions || []).find(x => pid(x) === id); if(!pos) return;
-      tx.push({date: monthEnd(d.month), line: pos.code, desc: `${pos.titleEn || pos.title} salary - ${MON_EN[m - 1]} ${y}`, amount: num(pos.salary), month: d.month, ref: "Salary voucher"}); });
-  });
-  exOf(p).filter(e => (e.files || {}).RCPT && (e.f || {}).rcptDate && e.f.rcptDate <= end).forEach(e => {
-    const pos = (p.positions || []).find(x => pid(x) === e.line) || {};
-    tx.push({date: e.f.rcptDate, line: pos.code || "", desc: e.descEn || pos.titleEn || e.title, amount: exTotals(e, true).total, month: e.f.rcptDate.slice(0, 7), ref: `Receipt No ${(e.nums || {}).RCPT || ""}`});
-  });
-  return tx.sort((a, b) => a.date.localeCompare(b.date) || a.line.localeCompare(b.line, undefined, {numeric: true}));
+  const end = monthEnd(upto);
+  return receiptUnits(p).filter(x => x.date <= end).map(x => ({n: x.n, date: x.date, line: x.line, desc: x.desc, amount: x.amount, month: x.month}));
 }
 
 function renderReport(p){
@@ -2111,7 +2124,7 @@ async function rpMake(say){
     x = setCell(setCell(setCell(x, "D1", ex.orgEn || ""), "E4", Math.round(totLocal)), "I4", avg);
     for(let i = 0; i < Math.max(40, tx.length); i++){
       const r = 6 + i, t = tx[i];
-      const v = t ? {A: i + 1, B: t.line, C: dmy(t.date), D: t.desc, E: t.amount, F: t.amount, G: t.eur, H: "C", I: t.ref} : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, H: null, I: null};
+      const v = t ? {A: t.n, B: t.line, C: dmy(t.date), D: t.desc, E: t.amount, F: t.amount, G: t.eur, H: "C", I: ""} : {A: null, B: null, C: null, D: null, E: null, F: null, G: null, H: null, I: null};
       for(const [c, val] of Object.entries(v)) x = setCell(x, c + r, val);
     }
     zip.file(fTx, x);
@@ -2210,6 +2223,7 @@ document.addEventListener("click", e => {
   else if(t.id === "monthAll") monthAll(t);
   else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
   else if(t.id === "pickDir") pickDir();
+  else if(t.id === "renumber"){ const m = $("#doc-msg"); renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.dataset.dl){ const m = $("#doc-msg"); saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.dataset.dlall !== undefined){ const m = $("#doc-msg"); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
   else if(t.id === "docSave"){ const p = projects[current], m = $("#doc-msg");
