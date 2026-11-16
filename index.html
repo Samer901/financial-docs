@@ -235,6 +235,15 @@ details.excard{border-radius:10px}
 #page-work[hidden],#page-setup[hidden]{display:none}
 @media (max-width:760px){.setup{grid-template-columns:1fr}.rail{position:static;flex-direction:row;overflow-x:auto}.rail .rt,.rail .rsep{display:none}.rstep .s{display:none}.rstep{white-space:nowrap}}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+.btab{table-layout:fixed;min-width:640px}
+.btab td{padding-inline:4px}
+.btab input,.btab select{min-width:0;max-width:100%;box-sizing:border-box}
+.btab input[type=number]{padding-inline:6px}
+.btab textarea{width:100%;box-sizing:border-box;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px;resize:vertical;field-sizing:content;line-height:1.4}
+.btab td.bname div{margin-bottom:6px;line-height:1.5}
+.btab .num{text-align:end;white-space:nowrap}
+.btab tr.bsec td{background:var(--bg);font-weight:700;padding-top:12px;padding-bottom:12px}
+.btab tr.bline td{font-weight:600;color:var(--muted);border-bottom:1px dashed var(--line)}
 </style>
 </head>
 <body>
@@ -275,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794767799";</script>
+<script>window.APP_VERSION = "1794825872";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794767799"></script>
@@ -2789,17 +2798,38 @@ function setWorkMonth(v){
 function renderBudget(p){
   const box = $("#budgetBox"); if(!box) return;
   const ex = p.expense || {}, map = {...LINE_DEFAULT, ...(ex.lines || {})}, cats = ecfg().categories || [], mi = budgetMissing(p);
-  const rows = (p.positions || []).map(x => { const st = isStaff(x), cnt = x.count || (st ? (p.contract || {}).months : "") || "";
-    return `<tr data-bl="${esc(pid(x))}"><td class="code">${esc(x.code)}${x.added ? `<br><button type="button" class="x" data-rmline="${esc(pid(x))}" title="بند أُضيف خارج الموازنة الأصلية">حذف</button>` : ""}</td><td>${esc(x.title)}${x.added ? '<br><span class="code">مضاف خارج الموازنة</span>' : ""}</td>
-      <td><input name="ten" dir="ltr" value="${esc(x.titleEn || "")}" aria-label="الاسم بالإنجليزية" style="width:230px"></td>
-      <td><input name="unit" value="${esc(x.unitName || "")}" style="width:90px" aria-label="الوحدة"></td>
-      <td><input name="cnt" type="number" min="0" value="${esc(cnt)}" style="width:70px" aria-label="العدد"></td>
-      <td><input name="price" type="number" min="0" value="${esc(x.salary || "")}" style="width:100px" aria-label="سعر الوحدة"></td>
-      <td class="code">${(num(x.salary) * num(cnt)).toLocaleString("en-US")}</td>
-      <td>${st ? '<span class="code">موظف</span>' : `<select data-line="${esc(pid(x))}"><option value="">— الفئة —</option>${cats.map(c => `<option value="${esc(c.id)}" ${c.id === map[pid(x)] ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`}</td></tr>`; }).join("");
+  const all = p.positions || [], bd = p.budget || {}, fmt = v => num(v).toLocaleString("en-US");
+  const rowT = x => num(x.salary) * num(x.count || (isStaff(x) ? (p.contract || {}).months : "") || 0);
+  const row = x => { const st = isStaff(x), cnt = x.count || (st ? (p.contract || {}).months : "") || "";
+    return `<tr data-bl="${esc(pid(x))}"><td class="code">${esc(x.code)}${x.added ? `<br><button type="button" class="x" data-rmline="${esc(pid(x))}" title="بند أُضيف خارج الموازنة الأصلية">حذف</button>` : ""}</td>
+      <td class="bname"><div>${esc(x.title)}${x.added ? ' <span class="code">— مضاف خارج الموازنة</span>' : ""}</div><textarea name="ten" dir="ltr" rows="1" aria-label="الاسم بالإنجليزية (للتقرير)" placeholder="الاسم بالإنجليزية (للتقرير)">${esc(x.titleEn || "")}</textarea></td>
+      <td><input name="unit" value="${esc(x.unitName || "")}" aria-label="الوحدة"></td>
+      <td><input name="cnt" type="number" min="0" value="${esc(cnt)}" aria-label="العدد"></td>
+      <td><input name="price" type="number" min="0" step="any" value="${esc(x.salary || "")}" aria-label="سعر الوحدة"></td>
+      <td class="code num">${fmt(rowT(x))}</td>
+      <td>${st ? '<span class="code">موظف</span>' : `<select data-line="${esc(pid(x))}" aria-label="الفئة"><option value="">— الفئة —</option>${cats.map(c => `<option value="${esc(c.id)}" ${c.id === map[pid(x)] ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>`}</td></tr>`; };
+  let rows = "";
+  if((bd.lines || []).length){
+    // تجميع حسب أقسام وبنود الموازنة الأصلية
+    const used = new Set(), secs = [...new Set(bd.lines.map(l => l.sec || ""))];
+    const inLine = (l, x) => x.code === l.code && (!x.sec || (x.sec || "") === (l.sec || "")) && !used.has(pid(x));
+    secs.forEach(sc => {
+      const ls = bd.lines.filter(l => (l.sec || "") === sc);
+      const secTot = ls.reduce((t, l) => t + num(l.amount), 0);
+      rows += `<tr class="bsec"><td colspan="5">${esc((bd.sections || {})[sc] || sc)}</td><td class="num">${fmt(secTot)}</td><td></td></tr>`;
+      ls.forEach(l => {
+        const xs = all.filter(x => inLine(l, x)); xs.forEach(x => used.add(pid(x)));
+        const sum = xs.reduce((t, x) => t + rowT(x), 0), ok = Math.abs(sum - num(l.amount)) < 0.005;
+        rows += `<tr class="bline"><td class="code">${esc(l.code)}</td><td colspan="4">${esc(l.name)}</td><td class="num">${fmt(l.amount)}${ok ? "" : `<br><span class="pill err" title="مجموع المدخلات لا يساوي مبلغ البند في الموازنة">${fmt(sum)}</span>`}</td><td></td></tr>` + xs.map(row).join("");
+      });
+    });
+    const rest = all.filter(x => !used.has(pid(x)));
+    if(rest.length) rows += `<tr class="bsec"><td colspan="7">بنود أخرى</td></tr>` + rest.map(row).join("");
+  } else rows = all.map(row).join("");
   box.innerHTML = `<details class="settings panel" open><summary><span>بنود الموازنة</span>${badge(mi)}</summary>
     <div class="phead"><span id="bl-msg" class="msg"></span><button type="button" data-bl-save="1">حفظ</button></div>
-    <div class="tscroll"><table class="ptab" style="min-width:980px"><thead><tr><th>البند</th><th>في الموازنة</th><th>بالإنجليزية (للتقرير)</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tscroll"><table class="ptab btab"><colgroup><col style="width:52px"><col><col style="width:92px"><col style="width:66px"><col style="width:76px"><col style="width:68px"><col style="width:112px"></colgroup>
+      <thead><tr><th>الرمز</th><th>البند (كما في الموازنة) والاسم بالإنجليزية</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="code">الفئة تحدد النماذج والمستندات المطلوبة لكل مصروف. تُعرَّف الفئات في «الإعدادات العامة».</p>
   </details>`;
 }
