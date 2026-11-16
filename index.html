@@ -268,7 +268,7 @@ details.excard{border-radius:10px}
         <div class="sstep" data-step="docs"><div id="projDocs"></div></div>
         <div class="sstep" data-step="people"><div id="peopleBox"></div></div>
         <div class="sstep" data-step="staff"><div id="content"><p class="empty">جارٍ التحميل…</p></div>
-          <div class="bar"><span id="allmsg" class="msg" aria-live="polite"></span><button type="button" id="saveAll">حفظ بطاقات الموظفين</button></div></div>
+          <div class="bar"><span id="allmsg" class="msg" aria-live="polite"></span><span style="display:flex;gap:8px"><button type="button" class="btn2" id="mkAll" title="ينشئ عقود البطاقات التي ليس لها عقد بعد، بدءاً بمدير المشروع">إنشاء العقود الناقصة للكل</button><button type="button" id="saveAll">حفظ بطاقات الموظفين</button></span></div></div>
         <div class="sstep" data-step="global"><div id="actBox"></div><div id="dutiesBox"></div></div>
         <div class="sfoot"><button type="button" class="btn2" id="stepPrev"></button><span class="sp"></span><button type="button" id="stepNext"></button></div>
       </section>
@@ -284,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794828096";</script>
+<script>window.APP_VERSION = "1794828309";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794767799"></script>
@@ -2945,6 +2945,26 @@ checkVersion(); setInterval(checkVersion, 5 * 60 * 1000);
 
 $("#project").addEventListener("change", e => { current = e.target.value; render(true); });
 document.getElementById("saveAll").addEventListener("click", saveAll);
+document.getElementById("mkAll").addEventListener("click", e => busy(e.currentTarget, makeAllContracts));
+async function makeAllContracts(){
+  const out = document.getElementById("allmsg");
+  await saveAll();
+  if(/تعذّر/.test(out.textContent)) return;
+  const p = projects[current], pm = (p.signatories || {}).pmPositionCode;
+  const cards = [...document.querySelectorAll(".card[data-key]")].filter(c => { const a = assignments[c.dataset.key]; return a && a.personKey && !contractDoc(a); });
+  cards.sort((x, y) => (y.dataset.pos === pm) - (x.dataset.pos === pm));
+  if(!cards.length){ out.className = "msg"; out.textContent = "كل الموظفين المحفوظين لديهم عقود. لإعادة إنشاء عقد استخدم زر البطاقة."; return; }
+  let ok = 0, bad = 0;
+  for(const c of cards){
+    const b = c.querySelector('[data-contract="1"]:not([data-wordonly])');
+    if(!b || b.disabled){ bad++; continue; }
+    out.className = "msg"; out.textContent = `جارٍ إنشاء العقود… (${ok + bad + 1} من ${cards.length})`;
+    await makeContract(b);
+    const m = c.querySelector(".cmsg"); if(m && /err/.test(m.className)) bad++; else ok++;
+  }
+  out.className = "msg " + (bad ? "err" : "ok");
+  out.textContent = `أُنشئ ${ok} عقد` + (bad ? `، وتعذّر ${bad}. راجع رسالة كل بطاقة.` : ".");
+}
 document.addEventListener("change", e => {
   if(e.target.name === "dpreset" || e.target.name === "cpreset"){ const box = e.target.closest(".dutyui") || e.target.closest("fieldset") || e.target.closest(".card");
     const ta = box && box.querySelector(e.target.name === "dpreset" ? '[name="dtext"]' : '[name="cDuties"]'); if(ta && e.target.value){ ta.value = (duties[e.target.value] || []).join("\n"); const nm = box.querySelector(e.target.name === "dpreset" ? '[name="dname"]' : '[name="cname"]'); if(nm) nm.value = e.target.value; } editing = true; }
