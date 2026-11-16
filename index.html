@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794840834";</script>
+<script>window.APP_VERSION = "1794841301";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -824,13 +824,7 @@ async function saveCard(form){
         doc.fileId = r.id; doc.fileName = r.title;
         person.docs.push(doc); personChanged = true;
       } else {
-        if(!rec.folderId){
-          const fr = await mcp.callTool("Google Drive", "create_file", {
-            title: `${pos.code} - ${name}`, parentId: (p.folders || {}).staff, contentMimeType: "application/vnd.google-apps.folder"});
-          let pl = fr.payload; if(typeof pl === "string"){ try{ pl = JSON.parse(pl); }catch(_){} }
-          rec.folderId = (pl && pl.id) || "";
-          if(!rec.folderId) throw {code:"tool_error", message:"لم يُنشأ مجلد الشخص."};
-        }
+        if(!(await alive(rec.folderId))) rec.folderId = await mkFolder(`${pos.code} - ${name}`, await projFolder(p, "staff"));
         const r = await upload(row.file, rec.folderId, `${row.type}_${safe}`);
         doc.fileId = r.id; doc.fileName = r.title;
         rec.docs.push(doc);
@@ -981,7 +975,7 @@ async function contractToPdf(btn){
   try{
     say("جارٍ تحويل النسخة المعدّلة إلى PDF…");
     const pos = (p.positions || []).find(x => pid(x) === cardEl.dataset.pos) || {}, v = people[a.personKey] || {};
-    const pdf = await wordToPdf(cd.wordId, a.folderId, `${pos.code} - عقد عمل - ${v.nameEn || shortName(v)}`, contractMarks(p, pos, v));
+    const pdf = await wordToPdf(cd.wordId, await staffFolder(p, pos, v, key), `${pos.code} - عقد عمل - ${v.nameEn || shortName(v)}`, contractMarks(p, pos, v));
     const docs = (a.docs || []).map(d => d.type === "عقد العمل" ? {...d, fileId: pdf.id, fileName: pdf.title} : d);
     await db.doc("assignments/" + key).update({docs});
     if(cd.fileId) await trash(cd.fileId).catch(() => {});
@@ -1030,11 +1024,7 @@ async function makeContract(btn){
     const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     const blob = await zip.generateAsync({type:"blob", mimeType: DOCX, compression:"DEFLATE", compressionOptions:{level:9}});
     const base = `${pos.code} - عقد عمل - ${v.nameEn || nm}`;
-    let folderId = a.folderId;
-    if(!folderId){
-      const fr = await mcp.callTool("Google Drive", "create_file", {title: `${pos.code} - ${v.nameEn || nm}`, parentId: (p.folders || {}).staff, contentMimeType: "application/vnd.google-apps.folder"});
-      folderId = payloadId(fr); if(!folderId) throw {code:"tool_error", message:"لم يُنشأ مجلد الموظف."};
-    }
+    const folderId = await staffFolder(p, pos, v, key);
     say("جارٍ حفظ نسخة Word…");
     const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folderId, base);
     let pdf = null;
@@ -1349,12 +1339,7 @@ async function tsMake(btn){
     const inp = await tsSaveInputs();
     const tpl = await loadTsTemplate();
     const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    let folder = (p.monthFolders || {})[tsMonth];
-    if(!folder){
-      const fr = await mcp.callTool("Google Drive", "create_file", {title: tsMonth, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
-      folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
-      await db.doc("projects/" + p.code).update({monthFolders: {[tsMonth]: folder}});
-    }
+    const folder = await monthFolder(p, tsMonth);
     const files = {...(inp.prev.files || {})}, miss = [];
     let n = 0;
     for(const {pos, v, id} of staff){
@@ -1384,7 +1369,7 @@ async function tsMake(btn){
       if(old){ await trash(old.xlsx); if(old.pdf) await trash(old.pdf); }
     }
     await db.doc("timesheets/" + p.code + "__" + tsMonth).update({files});
-    { const t = "تم إنشاء جداول الدوام." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss)].join("، ")}.` : " كل التواقيع وُضعت."); say(t); doneMsg = t; } return true;
+    { const t = "تم إنشاء جداول الدوام." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss)].join("، ")}.` : " كل التواقيع وُضعت.") + recNote(); say(t); doneMsg = t; } return true;
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
 }
 
@@ -1502,7 +1487,7 @@ async function uploadSig(input){
     const png = await cleanSigImage(file);
     if(kind === "stamp"){
       const p = projects[current]; say("جارٍ رفع الختم…");
-      const r = await upload(new File([png], "ختم.png", {type: "image/png"}), (p.folders || {}).project || FOLD.personDocs, `ختم الفريق - ${p.code}`);
+      const r = await upload(new File([png], "ختم.png", {type: "image/png"}), await projFolder(p, "project"), `ختم الفريق - ${p.code}`);
       const old = p.stampFileId; await db.doc("projects/" + p.code).update({stampFileId: r.id}); p.stampFileId = r.id; if(old) await trash(old).catch(() => {});
     } else {
       const v = people[key]; if(!v) throw {code: "tool_error", message: "احفظ الشخص أولاً."};
@@ -1641,12 +1626,11 @@ async function trashSet(o){ if(o){ await trash(o.xlsx); if(o.pdf) await trash(o.
 function rep(x, map){ for(const [k, v] of Object.entries(map)) x = x.split("{{" + k + "}}").join(xmlEsc(v)); return x; }
 
 async function monthFolder(p, ym = tsMonth){
-  let folder = (p.monthFolders || {})[ym];
-  if(!folder){
-    const fr = await mcp.callTool("Google Drive", "create_file", {title: ym, parentId: (p.folders || {}).monthly, contentMimeType: "application/vnd.google-apps.folder"});
-    folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
-    await db.doc("projects/" + p.code).update({monthFolders: {[ym]: folder}});
-  }
+  const old = (p.monthFolders || {})[ym];
+  if(await alive(old)) return old;
+  const folder = await mkFolder(ym, await projFolder(p, "monthly"));
+  await db.doc("projects/" + p.code).update({monthFolders: {[ym]: folder}}); p.monthFolders = {...(p.monthFolders || {}), [ym]: folder};
+  if(old) recreated(ym);
   return folder;
 }
 
@@ -1696,7 +1680,7 @@ async function prMake(btn){
     }
     await db.doc("payroll/" + p.code + "__" + prMonth).update({files});
     const miss = saveXP.missing || [];
-    { const t = "تم إنشاء الرواتب والإيصالات." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss.map(x => x.split(": ").pop()))].join("، ")}.` : " كل التواقيع وُضعت."); say(t); doneMsg = t; } return true;
+    { const t = "تم إنشاء الرواتب والإيصالات." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss.map(x => x.split(": ").pop()))].join("، ")}.` : " كل التواقيع وُضعت.") + recNote(); say(t); doneMsg = t; } return true;
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
 }
 
@@ -1812,11 +1796,46 @@ async function fetchExport(gid){
   const b64 = findB64(ex, 0).replace(/\s/g,""); const bin = atob(b64); const u = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i] = bin.charCodeAt(i); return u;
 }
 
+/* ===== المجلدات: يُتحقق من وجودها قبل الاستخدام، ويُعاد إنشاء المحذوف أو الموجود في السلة ===== */
+const liveOk = {};
+async function alive(id){
+  if(!id) return false;
+  if(liveOk[id] && Date.now() - liveOk[id] < 120000) return true;
+  try{ const gone = await window.appStore.missingFiles([id]); if(gone.has(id)) return false; }catch(_){ return true; }
+  liveOk[id] = Date.now(); return true;
+}
+async function mkFolder(title, parent){
+  const fr = await mcp.callTool("Google Drive", "create_file", {title, parentId: parent, contentMimeType: "application/vnd.google-apps.folder"});
+  const id = payloadId(fr); if(!id) throw {code: "tool_error", message: `لم يُنشأ مجلد «${title}».`};
+  liveOk[id] = Date.now(); return id;
+}
+const recList = [];
+const recreated = t => { recList.push(t); notice(`أُعيد إنشاء مجلدات كانت محذوفة على الدرايف: ${recList.join("، ")}.`); };
+const recNote = () => { const t = recList.length ? ` أُعيد إنشاء مجلدات كانت محذوفة: ${recList.join("، ")}.` : ""; recList.length = 0; return t; };
+async function projFolder(p, key){
+  const f = p.folders || {};
+  if(await alive(f[key])) return f[key];
+  const ROOTF = (window.APP_CONFIG || {}).rootFolderId;
+  const spec = {project: [`${p.code}${p.donor ? " - " + p.donor : ""}`, async () => ROOTF], salaries: ["الرواتب", () => projFolder(p, "project")],
+    staff: ["الكادر", () => projFolder(p, "salaries")], monthly: ["الشهرية", () => projFolder(p, "salaries")]}[key];
+  const id = await mkFolder(spec[0], await spec[1]());
+  await db.doc("projects/" + p.code).update({folders: {[key]: id}}); p.folders = {...(p.folders || {}), [key]: id};
+  if(f[key]) recreated(spec[0]);
+  return id;
+}
+async function staffFolder(p, pos, v, key){
+  const a = assignments[key] || {};
+  if(await alive(a.folderId)) return a.folderId;
+  const id = await mkFolder(`${pos.code} - ${v.nameEn || shortName(v) || v.name}`, await projFolder(p, "staff"));
+  if(assignments[key]){ await db.doc("assignments/" + key).update({folderId: id}); assignments[key] = {...assignments[key], folderId: id}; }
+  if(a.folderId) recreated(`${pos.code} - ${v.nameEn || v.name}`);
+  return id;
+}
 async function ensureFolder(title, parent, cacheKey, p){
   const cache = (p.docFolders || {});
-  if(cache[cacheKey]) return cache[cacheKey];
-  const fr = await mcp.callTool("Google Drive", "create_file", {title, parentId: parent, contentMimeType: "application/vnd.google-apps.folder"});
-  const id = payloadId(fr); if(!id) throw {code:"tool_error", message:"لم يُنشأ مجلد التوثيقات."};
+  if(await alive(cache[cacheKey])) return cache[cacheKey];
+  if(cache[cacheKey]) recreated(title);
+  const id = await mkFolder(title, parent);
   await db.doc("projects/" + p.code).update({docFolders: {[cacheKey]: id}});
   p.docFolders = {...cache, [cacheKey]: id};
   return id;
@@ -1946,7 +1965,7 @@ async function buildDocs(say, kind){
   const mine = all.filter(x => needMerge(x, p.docFiles || {}));
   if(!mine.length){ say("كل المستندات محدّثة، لا شيء يحتاج دمجاً."); return 0; }
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» الظاهر فوق زر الدمج، ثم ادمج."};
-  const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
+  const root = await ensureFolder(DOC_ROOT, await projFolder(p, "project"), "root", p);
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
   let n = 0;
@@ -2494,7 +2513,7 @@ function exRead(card){
 }
 
 async function exFolder(p, e){
-  const root = await ensureFolder("المصاريف", (p.folders || {}).project, "exroot", p);
+  const root = await ensureFolder("المصاريف", await projFolder(p, "project"), "exroot", p);
   const line = (p.positions || []).find(x => pid(x) === e.line);
   return ensureFolder(`${line ? line.code + " - " : ""}${e.title || "عملية"} - ${e.id}`.replace(/[\\/:*?"<>|]/g, " "), root, "ex:" + e.id, p);
 }
@@ -2890,7 +2909,7 @@ async function rpMake(say){
     const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     const blob = await zip.generateAsync({type: "blob", mimeType: XT, compression: "DEFLATE", compressionOptions: {level: 9}});
     say("جارٍ الحفظ في الدرايف…");
-    const folder = await ensureFolder("التقارير المالية", (p.folders || {}).project, "reports", p);
+    const folder = await ensureFolder("التقارير المالية", await projFolder(p, "project"), "reports", p);
     const base = `Financial Report - ${p.code} - ${rpMonth}`;
     const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
     const old = (ex.reports || {})[rpMonth]; if(old) await trashSet(old).catch(() => {});
