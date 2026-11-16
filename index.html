@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794841301";</script>
+<script>window.APP_VERSION = "1794841687";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -1414,7 +1414,7 @@ async function signPdf(bytes, marks){
       placed.add(m);
       const b = m.box(items.map(it => ({x: it.transform[4], y: it.transform[5], w: it.width, h: it.height})), page);
       let cx = b.cx, cy = b.cy;
-      if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height), w = im.width * sc, h = im.height * sc;
+      if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height) * (1 + rnd(0.12)), w = im.width * sc, h = im.height * sc;
         cx += rnd(5 * MM); cy += rnd(3 * MM);
         page.drawImage(im, {x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotate: PDFLib.degrees(rnd(3))}); res.done.push(m.label); }
       if(m.stamp){ const im = await img(m.stamp), d = 30 * MM, sc = Math.min(d / im.width, d / im.height), w = im.width * sc, h = im.height * sc;
