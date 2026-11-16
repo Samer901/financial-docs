@@ -35,10 +35,39 @@
   function requestToken(prompt) {
     return new Promise((res, rej) => { pendingAuth = { res, rej }; const o = { prompt }; if (email && !/select_account/.test(prompt)) o.hint = email; initClient().requestAccessToken(o); });
   }
+  /* تجديد الجلسة: نافذة Google لا تفتح إلا بضغطة من المستخدم، لذلك لا نطلبها في منتصف عمل طويل.
+     إن انتهت الجلسة دون ضغطة نُظهر شريطاً بزر «متابعة» وتنتظر العمليات حتى يضغطه. */
+  let authWait = null;
+  const gesture = () => !!(navigator.userActivation && navigator.userActivation.isActive);
+  function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: "auth_timeout" }), ms))]); }
+  async function renew() {
+    try { return await withTimeout(requestToken(""), 90000); }
+    catch (e) { pendingAuth = null; return withTimeout(requestToken("consent"), 120000); }
+  }
+  function askToContinue() {
+    if (authWait) return authWait.p;
+    let res; const p = new Promise((r) => (res = r)); authWait = { p };
+    const bar = document.createElement("div"); bar.id = "authbar";
+    bar.style.cssText = "position:fixed;inset-inline:0;bottom:0;z-index:9999;background:#7a2e0e;color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:center;justify-content:center;font:inherit";
+    bar.innerHTML = '<span>انتهت جلسة Google Drive والعمل متوقف بانتظارك.</span><button type="button" style="background:#fff;color:#7a2e0e;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer">متابعة العمل</button><span class="m"></span>';
+    document.body.appendChild(bar);
+    bar.querySelector("button").onclick = async () => {
+      const m = bar.querySelector(".m"); m.textContent = "جارٍ الاتصال…";
+      try { const t = await renew(); bar.remove(); authWait = null; res(t); }
+      catch (e) { m.textContent = "تعذّر الاتصال، اضغط مرة أخرى."; }
+    };
+    return p;
+  }
   async function getToken() {
     if (token && Date.now() < tokenExp) return token;
-    try { return await requestToken(""); } catch (e) { return requestToken("consent"); }
+    if (gesture() && !authWait) { try { return await renew(); } catch (e) {} }
+    return askToContinue();
   }
+  /* تجديد مسبق عند أي ضغطة إذا قاربت الجلسة على الانتهاء (أقل من 15 دقيقة) */
+  document.addEventListener("click", () => {
+    if (!token || pendingAuth || authWait || Date.now() < tokenExp - 15 * 60000) return;
+    renew().catch(() => {});
+  }, true);
 
   async function gfetch(url, opts = {}, retry = true) {
     const t = await getToken();
