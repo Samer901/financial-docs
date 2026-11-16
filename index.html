@@ -284,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794831580";</script>
+<script>window.APP_VERSION = "1794832076";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -1740,7 +1740,7 @@ function renderDocs(p, kind){
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
       ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
-    ${bad.length ? `<p class="review">${bad.length} مستند محفوظ برقم قديم. أعد الترقيم من تبويب «التقارير المالية» قبل الدمج.</p>` : ""}
+    ${bad.length ? `<div class="row"><p class="review" style="margin:0">${bad.length} مستند محفوظ برقم قديم. أعد ترقيمها قبل الدمج.</p><button type="button" data-renum="${kind}">إعادة الترقيم (${bad.length})</button></div>` : ""}
     <div class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر، تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح، تُستخدم التنزيلات العادية.")} ${canPickDir() ? `<button type="button" class="ghost" data-pickdir="${kind}">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
   </details>`;
@@ -1810,7 +1810,7 @@ async function buildDocs(say, kind){
   if(!all.length) throw {code: "tool_error", message: "لا توجد إيصالات دفع في هذه الفترة."};
   const mine = all.filter(x => needMerge(x, p.docFiles || {}));
   if(!mine.length){ say("كل المستندات محدّثة، لا شيء يحتاج دمجاً."); return 0; }
-  if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» أولاً."};
+  if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» الظاهر فوق زر الدمج، ثم ادمج."};
   const root = await ensureFolder(DOC_ROOT, (p.folders || {}).project, "root", p);
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
@@ -3029,6 +3029,8 @@ document.addEventListener("click", e => {
   else if(t.dataset.goto){ const el = document.getElementById(t.dataset.goto); if(el){ if(el.tagName === "DETAILS") el.open = true; el.scrollIntoView({block: "start", behavior: "smooth"}); } }
   else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
   else if(t.id === "tsMakeBtn" || t.id === "prMakeBtn"){ editing = true; busy(t, () => t.id === "tsMakeBtn" ? tsMake(t) : prMake(t)).finally(() => { t.disabled = false; editing = false; setTimeout(() => render(true), 600); }); }
+  else if(t.dataset.renum){ const k = t.dataset.renum, put = (x, err) => { const m = $("#doc-msg-" + k); if(m){ m.className = "msg" + (err ? " err" : " ok"); m.textContent = x; } if(err) notice("إعادة الترقيم: " + x, true); };
+    busy(t, async () => { await renumberDocs(put); const p = projects[current]; if(p && !docMismatch(p, receiptUnits(p)).length) put("تمت إعادة الترقيم. يمكنك الدمج الآن."); }); }
   else if(t.id === "renumber"){ const m = $("#doc-msg-list"); busy(t, () => renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; })); }
   else if(t.dataset.dl){ const m = docMsg(); busy(t, () => saveMerged([t.dataset.dl], (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; })); }
   else if(t.dataset.dlall !== undefined){ curDocKind = t.closest("#docBoxEx") ? "ex" : "pay"; const m = docMsg(); saveMerged(Object.keys(mergedBlobs), (x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; }); }
