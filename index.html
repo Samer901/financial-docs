@@ -284,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794832076";</script>
+<script>window.APP_VERSION = "1794832988";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -2991,7 +2991,9 @@ document.addEventListener("change", e => {
       card.querySelector(".pfiles").hidden = !(isNew || (v && (!v.idFileId || !v.cvFileId)));
       if(v){ const pos = (projects[current].positions || []).find(x => pid(x) === (expenses[card.dataset.exKey] || {}).line) || {};
         const set = (n, val) => { const i = card.querySelector(`[name="${n}"]`); if(i && val) i.value = val; };
-        set("s_name", v.name); set("s_mobile", v.mobile); set("s_addr", v.address); set("s_prof", gw(v.gender, pos.title_m, pos.title_f) || pos.title); }
+        set("s_name", v.name); set("s_mobile", v.mobile); set("s_addr", v.address); set("s_prof", gw(v.gender, pos.title_m, pos.title_f) || pos.title);
+        // إعادة رسم البطاقة ليظهر فوراً وجود الهوية والسيرة ومرفقات هذا الشخص
+        const k = card.dataset.exKey; expenses[k] = exRead(card); exOpen.add(k); card.outerHTML = exCard(projects[current], {key: k, ...expenses[k]}); }
     }
     if(card && ["mode","invSrc","rfqMode"].includes(e.target.name)){ const k = card.dataset.exKey;
       const keep = [...card.querySelectorAll('[name^="np_"]:not([type="file"]),[name="s_person"],[name="reqNew"],[name="reqTitle"]')].map(i => [i.name, i.value]);
