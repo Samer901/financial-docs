@@ -284,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794826048";</script>
+<script>window.APP_VERSION = "1794828096";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794767799"></script>
@@ -335,7 +335,43 @@ const STATUS = {
   read: ["تمت قراءة الهوية", "read"]
 };
 
+/* حفظ ما كتبه المستخدم في بطاقات الموظفين عبر إعادة الرسم (مثل إضافة بطاقة جديدة) */
+let dropCardEdits = false;
+document.addEventListener("input", e => { if(e.target.closest && e.target.closest(".card[data-key]") && e.target.name) e.target.dataset.touched = "1"; }, true);
+document.addEventListener("change", e => { if(e.target.closest && e.target.closest(".card[data-key]") && e.target.name) e.target.dataset.touched = "1"; }, true);
+function snapCards(){
+  const out = {};
+  document.querySelectorAll(".card[data-key]").forEach(c => {
+    const f = [], cnt = {};
+    c.querySelectorAll("[name]").forEach(el => { const i = cnt[el.name] = (cnt[el.name] || 0) + 1;
+      if(el.dataset.touched !== "1") return;
+      f.push({name: el.name, i, value: el.value, checked: el.checked, files: el.type === "file" ? el.files : null}); });
+    if(f.length) out[c.dataset.key] = f;
+  });
+  return out;
+}
+function restoreCards(keep){
+  for(const [key, f] of Object.entries(keep)){
+    const c = document.querySelector(`.card[data-key="${CSS.escape(key)}"]`); if(!c) continue;
+    const byName = {}; c.querySelectorAll("[name]").forEach(el => (byName[el.name] ||= []).push(el));
+    const order = [...f].sort((a, b) => (b.name === "person") - (a.name === "person"));
+    for(const x of order){
+      const el = (byName[x.name] || [])[x.i - 1]; if(!el) continue;
+      if(el.type === "file"){ if(x.files && x.files.length) try{ el.files = x.files; }catch(_){} }
+      else if(el.type === "checkbox" || el.type === "radio") el.checked = x.checked;
+      else el.value = x.value;
+      el.dataset.touched = "1";
+      if(x.name === "person"){ syncCard(c); Object.keys(byName).forEach(k => delete byName[k]); c.querySelectorAll("[name]").forEach(e2 => (byName[e2.name] ||= []).push(e2)); }
+    }
+    editing = true;
+  }
+}
 function render(force){
+  const keep = dropCardEdits ? {} : snapCards(); dropCardEdits = false;
+  render0(force);
+  if(Object.keys(keep).length) restoreCards(keep);
+}
+function render0(force){
   if(busyN > 0 && !force){ dirty = true; return; }
   if(saving || (editing && !force)){ dirty = true; if(editing && !saving) notice("وصلت تحديثات جديدة. ستظهر بعد الحفظ."); return; }
   editing = false; dirty = false;
@@ -821,7 +857,7 @@ async function saveAll(){
     if(r === "ok") ok++; else if(r === "err") err++;
   }
   btn.disabled = false; saving = false;
-  if(!err){ editing = false; for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => !assignments[k]); render(true); notice(""); }
+  if(!err){ editing = false; dropCardEdits = true; for(const b in extraSlots) extraSlots[b] = extraSlots[b].filter(k => !assignments[k]); render(true); notice(""); }
   if(!ok && !err){ out.textContent = "لا توجد تغييرات للحفظ."; return; }
   out.className = "msg " + (err ? "err" : "ok");
   out.textContent = `تم حفظ ${ok}` + (err ? `، وتعذّر حفظ ${err}. راجع البطاقات المعلّمة.` : ".");
