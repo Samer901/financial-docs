@@ -244,6 +244,8 @@ details.excard{border-radius:10px}
 .btab .num{text-align:end;white-space:nowrap}
 .btab tr.bsec td{background:var(--bg);font-weight:700;padding-top:12px;padding-bottom:12px}
 .btab tr.bline td{font-weight:600;color:var(--muted);border-bottom:1px dashed var(--line)}
+.pf-new:not([hidden]){display:inline-flex;gap:8px;align-items:center}
+.pf-have{flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -284,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794832988";</script>
+<script>window.APP_VERSION = "1794836778";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -2190,6 +2192,14 @@ const FORM_TPL = {PR:"12qWdSZPjjusDiaby5mEoA-pKCUWyTrsf", RFQ:"1oHi5wso6NHXPnp6y
 const UPLOAD_FORMS = []; // كل النماذج تُولَّد؛ العقد يُولَّد من قالب الخبير ويمكن رفع نسخته الموقّعة
 const EXPERT_TPL = "19FU9mah6lSqRgGboaH6PIwOpPuisqmOP";
 const exPerson = e => e.personKey ? people[e.personKey] : null;
+/* ملف الشخص في بطاقة المصروف: إن كان مرفوعاً يظهر رابطه مع «استبدال»، وإلا خانة الرفع */
+function pfileRow(v, field, name, label, accept){
+  const id = v && v[field];
+  const input = `<input type="file" name="${name}" accept="${accept}">`;
+  if(!id) return `<div class="file"><label style="margin:0">${label}</label>${input}</div>`;
+  return `<div class="file pf-have"><label style="margin:0">${label}</label><span class="current">${dlink(id, "مرفوعة ✓ — عرض")}</span>
+    <button type="button" class="linkbtn" data-pfrep="1">استبدال</button><span class="pf-new" hidden>${input}<button type="button" class="linkbtn" data-pfcancel="1">إلغاء</button></span></div>`;
+}
 function attFile(e, t){
   const a = (e.att || {})[t]; if(a) return a.id;
   const v = exPerson(e); if(!v) return "";
@@ -2283,12 +2293,11 @@ function exCard(p, e){
       <div class="sgrid"><div><label>من قائمة الأشخاص</label><select name="s_person">${has("CONTRACT") ? "" : '<option value="">— مورد أو جهة (إدخال يدوي) —</option>'}
         ${Object.entries(people).sort((a, b) => (a[1].name || "").localeCompare(b[1].name || "", "ar")).map(([pk, v]) => `<option value="${esc(pk)}" ${pk === e.personKey ? "selected" : ""}>${esc(v.name)}</option>`).join("")}
         <option value="__new" ${has("CONTRACT") && !exPerson(e) ? "selected" : ""}>+ شخص جديد</option></select></div>
-        <div class="current" style="align-self:end">${exPerson(e) ? `الهوية: ${exPerson(e).idFileId ? dlink(exPerson(e).idFileId, "✓") : "✗"} · السيرة: ${exPerson(e).cvFileId ? dlink(exPerson(e).cvFileId, "✓") : "✗"}${exPerson(e).status === "read" ? " · تم التحقق" : (exPerson(e).idFileId ? " · بانتظار قراءة الهوية" : "")}` : ""}</div></div>
+        <div class="current" style="align-self:center;justify-self:start">${exPerson(e) ? (exPerson(e).status === "read" ? '<span class="pill read">تم التحقق من الهوية</span>' : (exPerson(e).idFileId ? '<span class="pill">بانتظار قراءة الهوية</span>' : "")) : ""}</div></div>
       <div class="newperson" ${has("CONTRACT") && !exPerson(e) ? "" : "hidden"}><p class="code">بيانات الشخص الجديد: أدخلها يدوياً، أو ارفع الهوية فقط واطلب من Claude استخراجها.</p><div class="sgrid">
         ${inp("np_name", "الاسم الكامل", "")}${inp("np_father", "اسم الأب", "")}${inp("np_mother", "اسم الأم", "")}${inp("np_dob", "تاريخ الميلاد", "", "date")}${inp("np_nid", "الرقم الوطني", "", "", 'dir="ltr"')}
         <div><label>الجنس</label><select name="np_gender"><option value="">—</option><option value="m">ذكر</option><option value="f">أنثى</option></select></div>${inp("np_nat", "الجنسية", "")}</div></div>
-      <div class="pfiles" ${exPerson(e) && exPerson(e).idFileId && exPerson(e).cvFileId ? "hidden" : ""}><div class="file"><label style="margin:0">صورة الهوية</label><input type="file" name="np_id" accept="image/jpeg,image/png,application/pdf"></div>
-        <div class="file"><label style="margin:0">السيرة الذاتية</label><input type="file" name="np_cv" accept="application/pdf,.doc,.docx,image/jpeg,image/png"></div></div>
+      <div class="pfiles">${pfileRow(exPerson(e), "idFileId", "np_id", "صورة الهوية", "image/jpeg,image/png,application/pdf")}${pfileRow(exPerson(e), "cvFileId", "np_cv", "السيرة الذاتية", "application/pdf,.doc,.docx,image/jpeg,image/png")}</div>
       <div class="sgrid">
       ${inp("s_name", "الاسم", sup.name)}${inp("s_company", "الاسم التجاري", sup.company)}${inp("s_mobile", "الموبايل", sup.mobile, "", 'dir="ltr"')}
       ${inp("s_email", "البريد", sup.email, "", 'dir="ltr"')}${inp("s_addr", "العنوان", sup.addr)}${inp("s_prof", "المهنة / صفة العقد", sup.prof)}</div></fieldset>` : ""}
@@ -2988,7 +2997,6 @@ document.addEventListener("change", e => {
     if(card && e.target.name === "s_person"){ editing = true;
       const pk = e.target.value, v = people[pk], isNew = pk === "__new";
       card.querySelector(".newperson").hidden = !isNew;
-      card.querySelector(".pfiles").hidden = !(isNew || (v && (!v.idFileId || !v.cvFileId)));
       if(v){ const pos = (projects[current].positions || []).find(x => pid(x) === (expenses[card.dataset.exKey] || {}).line) || {};
         const set = (n, val) => { const i = card.querySelector(`[name="${n}"]`); if(i && val) i.value = val; };
         set("s_name", v.name); set("s_mobile", v.mobile); set("s_addr", v.address); set("s_prof", gw(v.gender, pos.title_m, pos.title_f) || pos.title);
@@ -3012,6 +3020,8 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("click", e => {
   const t = e.target.closest("button"); if(!t) return;
+  if(t.dataset.pfrep || t.dataset.pfcancel){ const w = t.closest(".pf-have"), nw = w.querySelector(".pf-new"), rep = w.querySelector("[data-pfrep]");
+    const on = !!t.dataset.pfrep; nw.hidden = !on; rep.hidden = on; if(!on){ const f = nw.querySelector('input[type="file"]'); if(f) f.value = ""; } editing = true; return; }
   if(t.classList.contains("dday")){ t.classList.toggle("on"); t.setAttribute("aria-pressed", t.classList.contains("on")); editing = true;
     if(t.closest('[data-grid="hol"]')){ const d = t.dataset.day, on = t.classList.contains("on");
       document.querySelectorAll('tr[data-tsid] .dday[data-day="' + d + '"]').forEach(b => { if(on){ b.classList.remove("on"); b.disabled = true; } else if(!b.classList.contains("wkend")) b.disabled = false; }); }
