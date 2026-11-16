@@ -284,7 +284,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794825872";</script>
+<script>window.APP_VERSION = "1794826048";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794767799"></script>
@@ -2812,7 +2812,7 @@ function renderBudget(p){
   if((bd.lines || []).length){
     // تجميع حسب أقسام وبنود الموازنة الأصلية
     const used = new Set(), secs = [...new Set(bd.lines.map(l => l.sec || ""))];
-    const inLine = (l, x) => x.code === l.code && (!x.sec || (x.sec || "") === (l.sec || "")) && !used.has(pid(x));
+    const inLine = (l, x) => (x.line ? x.line === l.code : (x.code === l.code || x.code.startsWith(l.code + "."))) && (!x.sec || (x.sec || "") === (l.sec || "")) && !used.has(pid(x));
     secs.forEach(sc => {
       const ls = bd.lines.filter(l => (l.sec || "") === sc);
       const secTot = ls.reduce((t, l) => t + num(l.amount), 0);
@@ -2829,7 +2829,7 @@ function renderBudget(p){
   box.innerHTML = `<details class="settings panel" open><summary><span>بنود الموازنة</span>${badge(mi)}</summary>
     <div class="phead"><span id="bl-msg" class="msg"></span><button type="button" data-bl-save="1">حفظ</button></div>
     <div class="tscroll"><table class="ptab btab"><colgroup><col style="width:52px"><col><col style="width:92px"><col style="width:66px"><col style="width:76px"><col style="width:68px"><col style="width:112px"></colgroup>
-      <thead><tr><th>الرمز</th><th>البند (كما في الموازنة) والاسم بالإنجليزية</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <thead><tr><th>الرمز</th><th>البند والاسم بالإنجليزية</th><th>الوحدة</th><th>العدد</th><th>سعر الوحدة</th><th>المجموع</th><th>النوع / الفئة</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="code">الفئة تحدد النماذج والمستندات المطلوبة لكل مصروف. تُعرَّف الفئات في «الإعدادات العامة».</p>
   </details>`;
 }
