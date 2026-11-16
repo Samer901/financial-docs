@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794839412";</script>
+<script>window.APP_VERSION = "1794840834";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -1432,7 +1432,7 @@ async function signPdf(bytes, marks){
       if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height), w = im.width * sc, h = im.height * sc;
         cx += rnd(5 * MM); cy += rnd(3 * MM);
         page.drawImage(im, {x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotate: PDFLib.degrees(rnd(3))}); res.done.push(m.label); }
-      if(m.stamp){ const im = await img(m.stamp), d = 24 * MM, sc = Math.min(d / im.width, d / im.height), w = im.width * sc, h = im.height * sc;
+      if(m.stamp){ const im = await img(m.stamp), d = 30 * MM, sc = Math.min(d / im.width, d / im.height), w = im.width * sc, h = im.height * sc;
         const sx = b.cx + (b.stampDx ?? b.w * 0.45) + rnd(5 * MM), sy = b.cy + rnd(3 * MM);
         page.drawImage(im, {x: sx - w / 2, y: sy - h / 2, width: w, height: h, opacity: 0.92, rotate: PDFLib.degrees(rnd(3))}); }
     }
@@ -1456,7 +1456,7 @@ function payrollMarks(p){
 }
 function voucherMarks(p, id, v){
   const isFin = id === (p.signatories || {}).financePositionCode, giver = isFin ? pmPerson(p) : finPerson(p);
-  const cell = (it, page) => ({cx: page.getWidth() * 0.64, cy: it[0].y - 2, w: 30 * MM, h: 9 * MM, stampDx: -20 * MM});
+  const cell = (it, page) => ({cx: page.getWidth() * 0.64, cy: it[0].y - 2, w: 30 * MM, h: 9 * MM, stampDx: -22 * MM});
   return [sigMark("المستلم", v, has(/Recipient/i), cell),
           sigMark(isFin ? "مدير المشروع (المسلّم)" : "المحاسب", giver, has(/Accountant/i), cell, p.stampFileId)];
 }
