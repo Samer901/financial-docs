@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1794836778";</script>
+<script>window.APP_VERSION = "1794839412";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1794831580"></script>
@@ -298,7 +298,7 @@ details.excard{border-radius:10px}
 const FOLD = {ids:"18eV2mGT2pvnhowEqtIzVY_1OtYgxkB82", cvs:"1_uv_DQ_B0F7XS_bczK7BkxSRBKfq46gL", personDocs:"1jirXMEXfcHWTdy1ry4CwRsn0efvTHGR0"};
 const INLINE_LIMIT = 700 * 1024;
 let db = null, mcp = null, fileArgs = false;
-let projects = {}, assignments = {}, people = {}, current = "", saving = false, dirty = false, editing = false;
+let projects = {}, assignments = {}, people = {}, current = "", saving = false, dirty = false, editing = false, doneMsg = "";
 const extraSlots = {};
 let duties = {}, templates = {}, tplCache = null, excelCfg = {}, editPerson = "";
 const curYM = new Date().toISOString().slice(0, 7);
@@ -607,6 +607,7 @@ function card(p, pos, key, idx, total){
       <div class="xrows">${xrow()}</div>
       <button type="button" class="ghost" data-addrow>+ مستند آخر</button>
     </details>
+    <div class="sigrow"></div>
     ${contractBox(p, pos, a)}
     <div class="row">
       <span class="msg" aria-live="polite"></span>
@@ -636,6 +637,7 @@ function syncCard(form){
   if(head) head.outerHTML = chips(isNew ? "" : k, pos, p, a);
   const info = isNew ? "" : personInfo(k, p, a, akey);
   const canReplace = v && (v.idFileId || v.cvFileId);
+  const sr = form.querySelector(".sigrow"); if(sr) sr.innerHTML = v && !isNew ? sigSlot("person", k, "التوقيع الإلكتروني", v.sigFileId) : "";
   form.querySelector(".info").innerHTML = info + (canReplace ? `<button type="button" class="x" data-replace>${replace ? "إخفاء الاستبدال" : "استبدال الهوية أو السيرة"}</button>` : "");
 }
 
@@ -884,7 +886,7 @@ const xmlEsc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace
 
 const DOCX_T = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const editLink = id => `<a href="https://docs.google.com/document/d/${esc(id)}/edit" target="_blank" rel="noopener">تعديل Word</a>`;
-async function wordToPdf(wordId, folder, base){
+async function wordToPdf(wordId, folder, base, marks){
   const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: wordId});
   const b64 = findB64(r, 0).replace(/\s/g, ""); if(!b64) throw {code:"tool_error", message:"تعذّر تحميل ملف Word من الدرايف."};
   const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: DOCX_T, base64Content: b64});
@@ -892,7 +894,10 @@ async function wordToPdf(wordId, folder, base){
   try{
     const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf"});
     const p64 = findB64(ex, 0); if(!p64) throw {code:"tool_error", message:"تعذّر تحويل العقد إلى PDF."};
-    return await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type: "application/pdf"}), folder, base);
+    let blob = b64ToBlob(p64, "application/pdf"), sg = null;
+    if(marks && marks.length){ sg = await signPdf(new Uint8Array(await blob.arrayBuffer()), marks); blob = new Blob([sg.bytes], {type: "application/pdf"}); }
+    const r = await upload(new File([blob], base + ".pdf", {type: "application/pdf"}), folder, base);
+    return {...r, sign: sg};
   } finally { if(gid) await trash(gid).catch(() => {}); }
 }
 
@@ -976,11 +981,11 @@ async function contractToPdf(btn){
   try{
     say("جارٍ تحويل النسخة المعدّلة إلى PDF…");
     const pos = (p.positions || []).find(x => pid(x) === cardEl.dataset.pos) || {}, v = people[a.personKey] || {};
-    const pdf = await wordToPdf(cd.wordId, a.folderId, `${pos.code} - عقد عمل - ${v.nameEn || shortName(v)}`);
+    const pdf = await wordToPdf(cd.wordId, a.folderId, `${pos.code} - عقد عمل - ${v.nameEn || shortName(v)}`, contractMarks(p, pos, v));
     const docs = (a.docs || []).map(d => d.type === "عقد العمل" ? {...d, fileId: pdf.id, fileName: pdf.title} : d);
     await db.doc("assignments/" + key).update({docs});
     if(cd.fileId) await trash(cd.fileId).catch(() => {});
-    say("تم التحويل إلى PDF.");
+    say("تم التحويل إلى PDF" + (pdf.sign ? sigNote(pdf.sign) : "") + ".");
   }catch(e){ say(e && e.message && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
   btn.disabled = false;
 }
@@ -1019,7 +1024,7 @@ async function makeContract(btn){
       SIG_A: rep.name, SIG_B: nm
     };
     say("جارٍ تجهيز العقد…");
-    const xml = fillXml(await loadTemplate(), {tags, duties: dl});
+    const xml = fillXml(markSigRuns(await loadTemplate()), {tags, duties: dl});
     const zip = await JSZip.loadAsync(tplCache.b64, {base64:true});
     zip.file("word/document.xml", xml);
     const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -1033,12 +1038,12 @@ async function makeContract(btn){
     say("جارٍ حفظ نسخة Word…");
     const w = await upload(new File([blob], base + ".docx", {type: DOCX}), folderId, base);
     let pdf = null;
-    if(!btn.dataset.wordonly){ say("جارٍ تحويل العقد إلى PDF…"); pdf = await wordToPdf(w.id, folderId, base); }
+    if(!btn.dataset.wordonly){ say("جارٍ تحويل العقد إلى PDF…"); pdf = await wordToPdf(w.id, folderId, base, contractMarks(p, pos, v)); }
     const docs = ((a.docs) || []).filter(d => d.type !== "عقد العمل");
     docs.push({type:"عقد العمل", fileId: pdf ? pdf.id : "", fileName: pdf ? pdf.title : "", wordId: w.id, expiry:"", addedAt: today()});
     await db.doc("assignments/" + key).update({docs, folderId, duties: dl});
     if(cd){ if(cd.fileId) await trash(cd.fileId).catch(() => {}); if(cd.wordId) await trash(cd.wordId).catch(() => {}); }
-    say(pdf ? "تم إنشاء العقد." : "تم إنشاء Word. اضغط «تعديل Word»، وبعد الانتهاء اضغط «تحويل إلى PDF».");
+    say(pdf ? "تم إنشاء العقد" + sigNote(pdf.sign || {done: [], missing: []}) + "." : "تم إنشاء Word. اضغط «تعديل Word»، وبعد الانتهاء اضغط «تحويل إلى PDF».");
   }catch(e){ btn.disabled = false; say(e && e.message && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
 }
 
@@ -1350,7 +1355,7 @@ async function tsMake(btn){
       folder = payloadId(fr); if(!folder) throw {code:"tool_error", message:"لم يُنشأ مجلد الشهر."};
       await db.doc("projects/" + p.code).update({monthFolders: {[tsMonth]: folder}});
     }
-    const files = {...(inp.prev.files || {})};
+    const files = {...(inp.prev.files || {})}, miss = [];
     let n = 0;
     for(const {pos, v, id} of staff){
       n++; say(`جارٍ إنشاء جدول ${v.name} (${n}/${staff.length})…`);
@@ -1370,14 +1375,16 @@ async function tsMake(btn){
       try{
         const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf(tpl)});
         const pdf64 = findB64(ex, 0);
-        if(pdf64){ const pu = await upload(new File([b64ToBlob(pdf64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
+        if(pdf64){ let pb = b64ToBlob(pdf64, "application/pdf");
+          const sg = await signPdf(new Uint8Array(await pb.arrayBuffer()), tsMarks(p, pos, v)); pb = new Blob([sg.bytes], {type: "application/pdf"}); miss.push(...sg.missing);
+          const pu = await upload(new File([pb], base + ".pdf", {type:"application/pdf"}), folder, base); pdfId = pu.id; }
       } finally { await trash(gid); }
       const old = files[id];
       files[id] = {xlsx: xu.id, pdf: pdfId, at: today()};
       if(old){ await trash(old.xlsx); if(old.pdf) await trash(old.pdf); }
     }
     await db.doc("timesheets/" + p.code + "__" + tsMonth).update({files});
-    say("تم إنشاء الجداول."); return true;
+    { const t = "تم إنشاء جداول الدوام." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss)].join("، ")}.` : " كل التواقيع وُضعت."); say(t); doneMsg = t; } return true;
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
 }
 
@@ -1386,6 +1393,128 @@ async function tsMake(btn){
 const ddmmyyyy = (y, m, d) => `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
 
 function personByPos(p, posId){ const a = assignments[p.code + "__" + posId]; return a && people[a.personKey]; }
+
+/* ===== التواقيع الإلكترونية والختم =====
+   تُوضع على ملف PDF بعد التحويل فقط، في مكان التوقيع الذي يُعثر عليه بنص في الصفحة، مع إزاحة عشوائية صغيرة. */
+const MM = 72 / 25.4, sigCache = {};
+const normName = n => String(n || "").replace(/\s+/g, " ").trim();
+function personByName(n){ const t = normName(n); if(!t) return null; const e = Object.entries(people).find(([k, v]) => normName(v.name) === t || normName(shortName(v)) === t); return e ? e[1] : null; }
+function boardSigner(p){ return personByName(((p.signatories || {}).pmHiredBy || {}).name); }
+function pmPerson(p){ return personByPos(p, (p.signatories || {}).pmPositionCode); }
+function finPerson(p){ return personByPos(p, (p.signatories || {}).financePositionCode); }
+async function driveBytes(id){
+  if(sigCache[id]) return sigCache[id];
+  const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: id});
+  const b64 = findB64(r, 0).replace(/\s/g, ""); if(!b64) throw {code: "tool_error", message: "تعذّر تحميل صورة التوقيع."};
+  const bin = atob(b64), u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return sigCache[id] = u;
+}
+const rnd = a => (Math.random() * 2 - 1) * a;
+/* marks: [{label, test(str), box(items, page) -> {cx, cy, w, h}, sig: fileId|"", stamp: fileId|""}] */
+async function signPdf(bytes, marks){
+  const res = {done: [], missing: []};
+  const want = marks.filter(m => m.sig || m.stamp);
+  marks.filter(m => !m.sig).forEach(m => res.missing.push(m.label));
+  if(!want.length || !window.pdfjsLib || !window.PDFLib) return {bytes, ...res};
+  pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  const src = await pdfjsLib.getDocument({data: bytes.slice(0)}).promise;
+  const out = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true}), imgs = {};
+  const img = async id => imgs[id] ||= await out.embedPng(await driveBytes(id));
+  const placed = new Set();
+  for(let pi = 1; pi <= src.numPages && placed.size < want.length; pi++){
+    const tc = await (await src.getPage(pi)).getTextContent(), page = out.getPage(pi - 1);
+    for(const m of want){
+      if(placed.has(m)) continue;
+      const items = tc.items.filter(it => it.str && m.test(it.str)); if(!items.length) continue;
+      placed.add(m);
+      const b = m.box(items.map(it => ({x: it.transform[4], y: it.transform[5], w: it.width, h: it.height})), page);
+      let cx = b.cx, cy = b.cy;
+      if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height), w = im.width * sc, h = im.height * sc;
+        cx += rnd(5 * MM); cy += rnd(3 * MM);
+        page.drawImage(im, {x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotate: PDFLib.degrees(rnd(3))}); res.done.push(m.label); }
+      if(m.stamp){ const im = await img(m.stamp), d = 24 * MM, sc = Math.min(d / im.width, d / im.height), w = im.width * sc, h = im.height * sc;
+        const sx = b.cx + (b.stampDx ?? b.w * 0.45) + rnd(5 * MM), sy = b.cy + rnd(3 * MM);
+        page.drawImage(im, {x: sx - w / 2, y: sy - h / 2, width: w, height: h, opacity: 0.92, rotate: PDFLib.degrees(rnd(3))}); }
+    }
+  }
+  want.filter(m => !placed.has(m) && m.sig).forEach(m => res.missing.push(m.label + " (لم يُعثر على مكانه)"));
+  return {bytes: await out.save(), ...res};
+}
+const has = re => s => re.test(s);
+const below = (dy, w, h) => it => { const x0 = Math.min(...it.map(i => i.x)), x1 = Math.max(...it.map(i => i.x + i.w)); return {cx: (x0 + x1) / 2, cy: it[0].y - dy, w, h}; };
+function sigMark(label, person, test, box, stamp){ return {label, sig: (person && person.sigFileId) || "", stamp: stamp || "", test, box}; }
+/* مواضع التوقيع لكل نموذج */
+function tsMarks(p, pos, v){
+  const isPm = pid(pos) === (p.signatories || {}).pmPositionCode;
+  return [sigMark("الموظف", v, has(/Employee Signature/i), below(12, 30 * MM, 9 * MM)),
+          sigMark("المشرف", isPm ? boardSigner(p) : pmPerson(p), has(/Supervisor Signature/i), below(12, 30 * MM, 9 * MM)),
+          sigMark("الموارد البشرية", finPerson(p), has(/HR Department/i), below(12, 30 * MM, 9 * MM))];
+}
+function payrollMarks(p){
+  return [sigMark("المسؤول المالي", finPerson(p), has(/Finance officer/i), below(38, 34 * MM, 10 * MM)),
+          sigMark("مدير المشروع", pmPerson(p), has(/Project manager/i), below(38, 34 * MM, 10 * MM))];
+}
+function voucherMarks(p, id, v){
+  const isFin = id === (p.signatories || {}).financePositionCode, giver = isFin ? pmPerson(p) : finPerson(p);
+  const cell = (it, page) => ({cx: page.getWidth() * 0.64, cy: it[0].y - 2, w: 30 * MM, h: 9 * MM, stampDx: -20 * MM});
+  return [sigMark("المستلم", v, has(/Recipient/i), cell),
+          sigMark(isFin ? "مدير المشروع (المسلّم)" : "المحاسب", giver, has(/Accountant/i), cell, p.stampFileId)];
+}
+function contractMarks(p, pos, v){
+  const isPm = pid(pos) === (p.signatories || {}).pmPositionCode;
+  return [sigMark("الطرف الأول", isPm ? boardSigner(p) : pmPerson(p), has(/QSA/), below(26, 38 * MM, 12 * MM), p.stampFileId),
+          sigMark("الطرف الثاني", v, has(/QSB/), below(26, 38 * MM, 12 * MM))];
+}
+const sigNote = r => r.done.length || r.missing.length ? (r.missing.length ? ` — بلا توقيع: ${r.missing.join("، ")}` : " — موقّع إلكترونياً") : "";
+/* علامات مخفية في العقد لتحديد مكان التوقيعين */
+function markSigRuns(xml){
+  const mk = t => `<w:r><w:rPr><w:color w:val="FFFFFF"/><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr><w:t>${t}</w:t></w:r>`;
+  return xml.replace(/<w:r\b(?:(?!<\/w:r>)[\s\S])*?\{\{SIG_([AB])\}\}[\s\S]*?<\/w:r>/g, (run, k) => mk("QS" + k + "1") + run + mk("QS" + k + "2"));
+}
+/* تنظيف صورة التوقيع أو الختم: إزالة الخلفية البيضاء وقصّ الفراغ */
+async function cleanSigImage(file){
+  if(!/^image\//.test(file.type)) throw {code: "tool_error", message: "ارفع صورة (PNG أو JPG) للتوقيع أو الختم."};
+  const bm = await createImageBitmap(file), sc = Math.min(1, 1400 / Math.max(bm.width, bm.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bm.width * sc); c.height = Math.round(bm.height * sc);
+  const g = c.getContext("2d"); g.drawImage(bm, 0, 0, c.width, c.height);
+  const d = g.getImageData(0, 0, c.width, c.height), px = d.data; let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+  for(let i = 0; i < px.length; i += 4){
+    const l = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2], a = px[i + 3] * Math.max(0, Math.min(1, (235 - l) / 60));
+    px[i + 3] = a; if(a > 24){ const p = i / 4, x = p % c.width, y = (p / c.width) | 0; if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+  }
+  if(x1 < 0) throw {code: "tool_error", message: "الصورة فارغة أو فاتحة جداً."};
+  g.putImageData(d, 0, 0);
+  const o = document.createElement("canvas"), pad = 6; o.width = x1 - x0 + 1 + pad * 2; o.height = y1 - y0 + 1 + pad * 2;
+  o.getContext("2d").drawImage(c, x0, y0, x1 - x0 + 1, y1 - y0 + 1, pad, pad, x1 - x0 + 1, y1 - y0 + 1);
+  return await new Promise(r => o.toBlob(r, "image/png"));
+}
+function sigSlot(kind, key, label, fileId){
+  const input = `<input type="file" name="sigfile" accept="image/png,image/jpeg" aria-label="${esc(label)}">`;
+  const body = fileId ? `<span class="current">${dlink(fileId, "مرفوع ✓ — عرض")}</span><button type="button" class="linkbtn" data-pfrep="1">استبدال</button><span class="pf-new" hidden>${input}<button type="button" class="linkbtn" data-pfcancel="1">إلغاء</button></span>` : input;
+  return `<div class="file sigslot ${fileId ? "pf-have" : ""}" data-sigkind="${kind}" data-sigkey="${esc(key)}"><label style="margin:0">${esc(label)}</label>${body}<span class="msg sigmsg" aria-live="polite"></span></div>`;
+}
+async function uploadSig(input){
+  const slot = input.closest(".sigslot"), m = slot.querySelector(".sigmsg"), kind = slot.dataset.sigkind, key = slot.dataset.sigkey, file = input.files[0];
+  if(!file) return;
+  const say = (t, err) => { m.className = "msg sigmsg" + (err ? " err" : " ok"); m.textContent = t; if(err) notice("التوقيع: " + t, true); };
+  try{
+    say("جارٍ تجهيز الصورة…");
+    const png = await cleanSigImage(file);
+    if(kind === "stamp"){
+      const p = projects[current]; say("جارٍ رفع الختم…");
+      const r = await upload(new File([png], "ختم.png", {type: "image/png"}), (p.folders || {}).project || FOLD.personDocs, `ختم الفريق - ${p.code}`);
+      const old = p.stampFileId; await db.doc("projects/" + p.code).update({stampFileId: r.id}); p.stampFileId = r.id; if(old) await trash(old).catch(() => {});
+    } else {
+      const v = people[key]; if(!v) throw {code: "tool_error", message: "احفظ الشخص أولاً."};
+      say("جارٍ رفع التوقيع…");
+      const r = await upload(new File([png], "توقيع.png", {type: "image/png"}), FOLD.personDocs, `توقيع - ${v.nameEn || v.name}`);
+      const old = v.sigFileId; await db.doc("people/" + key).update({sigFileId: r.id, sigFileName: r.title}); people[key] = {...v, sigFileId: r.id, sigFileName: r.title}; if(old) await trash(old).catch(() => {});
+    }
+    input.value = ""; delete input.dataset.touched;
+    editing = false; render(true);
+    notice(kind === "stamp" ? "تم رفع الختم. يُوضع عند إنشاء العقود وإيصالات الدفع أو إعادة إنشائها." : "تم رفع التوقيع. يُوضع عند إنشاء المستندات أو إعادة إنشائها.");
+  }catch(e){ say(e && e.code === "tool_error" ? e.message : mcpMessage(e), true); }
+}
 
 function renderPayroll(p){
   const box = $("#prBox"); if(!box) return;
@@ -1460,7 +1589,7 @@ async function pageOf(tpl){
   if(rg) o.range = [+rg[2] - 1, cn(rg[1]) - 1, +rg[4], cn(rg[3])];
   return tpl.page = o;
 }
-async function saveXP(blob, folder, base, tpl){
+async function saveXP(blob, folder, base, tpl, marks){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
   const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
@@ -1469,7 +1598,9 @@ async function saveXP(blob, folder, base, tpl){
   try{
     const ex = await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf(tpl)});
     const p64 = findB64(ex, 0);
-    if(p64){ const pu = await upload(new File([b64ToBlob(p64, "application/pdf")], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
+    if(p64){ let pb = b64ToBlob(p64, "application/pdf");
+      if(marks && marks.length){ const sg = await signPdf(new Uint8Array(await pb.arrayBuffer()), marks); pb = new Blob([sg.bytes], {type: "application/pdf"}); (saveXP.missing ||= []).push(...sg.missing.map(x => `${base}: ${x}`)); }
+      const pu = await upload(new File([pb], base + ".pdf", {type:"application/pdf"}), folder, base); pdf = pu.id; }
   } finally { if(gid) await trash(gid); }
   return {xlsx: xu.id, pdf, at: today()};
 }
@@ -1546,7 +1677,8 @@ async function prMake(btn){
       for(const [col, v] of Object.entries(vals)) x = setCell(x, col + r, v);
     }
     for(let r = 7 + staff.length; r <= 19; r++) x = x.replace(new RegExp(`<row r="${r}"(?![^>]*hidden)`), `<row r="${r}" hidden="1"`);
-    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, pt);
+    saveXP.missing = [];
+    const pf = await saveXP(await buildX(pt, x), folder, `جدول الرواتب - ${prMonth}`, pt, payrollMarks(p));
     await trashSet(files.payroll); files.payroll = pf;
     // الإيصالات والفواتير
     const vt = await loadX(templates.voucher);
@@ -1556,14 +1688,15 @@ async function prMake(btn){
       const d = inp.deductions[id] || {}, sal = Number(pos.salary) || 0, net = sal - (d.adv || 0) - (d.loan || 0);
       const title = gw(v.gender, pos.title_m, pos.title_f), lv = ((ts.leave || {})[id] || []).length;
       let vx = rep(vt.xml, {DATE: date, NO: `${prMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
-        ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: fin ? fin.name : ""});
+        ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: id === inp.finPos ? (pm ? pm.name : "") : (fin ? fin.name : "")});
       vx = setCell(setCell(vx, "F14", sal), "F24", net);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
-      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, vt);
+      const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, vt, voucherMarks(p, id, v));
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
     }
     await db.doc("payroll/" + p.code + "__" + prMonth).update({files});
-    say("تم إنشاء الرواتب."); return true;
+    const miss = saveXP.missing || [];
+    { const t = "تم إنشاء الرواتب والإيصالات." + (miss.length ? ` بلا توقيع إلكتروني: ${[...new Set(miss.map(x => x.split(": ").pop()))].join("، ")}.` : " كل التواقيع وُضعت."); say(t); doneMsg = t; } return true;
   }catch(e){ say(e && e.code === "tool_error" ? (e.message || mcpMessage(e)) : mcpMessage(e), true); return false; }
 }
 
@@ -2053,6 +2186,11 @@ function renderActs(p){
       <div><label>صفته</label><input id="s-cap" value="${esc(pm.capacity||"")}"></div>
       <div><label>الجنس</label><select id="s-g"><option value="f" ${pm.gender==="f"?"selected":""}>أنثى</option><option value="m" ${pm.gender==="m"?"selected":""}>ذكر</option></select></div>
     </div>
+    ${(() => { const bp = boardSigner(p), bk = bp && Object.keys(people).find(k => people[k] === bp);
+      return bk ? sigSlot("person", bk, `توقيع ${bp.name}`, bp.sigFileId) : (pm.name ? `<p class="code">لرفع توقيع ${esc(pm.name)} أضفها إلى دليل الأشخاص بنفس الاسم.</p>` : ""); })()}
+    <h3>ختم الفريق</h3>
+    <p class="code">يُوضع على العقود وإيصالات الدفع بجانب توقيع الفريق.</p>
+    ${sigSlot("stamp", p.code, "صورة الختم", p.stampFileId)}
     <h3>الموقّعون على النماذج</h3>
     <div class="sgrid sg2">${SIGNERS.map(([k, l]) => `<div><label>${l}: الاسم</label>${signerSel(p, k, (sg[k] || {}).name || "")}</div><div><label>${l}: المنصب</label><input data-sg="${k}" name="t" value="${esc((sg[k] || {}).title || "")}"></div>`).join("")}</div>
     <h3>بداية الترقيم</h3>
@@ -2172,7 +2310,7 @@ async function actClick(t){
     const start = {}; NUMBERED.forEach(([k]) => { start[k] = Math.max(1, Number(document.querySelector(`[data-st="${k}"]`).value) || 1); });
     const lines = {}; document.querySelectorAll("select[data-line]").forEach(s => { lines[s.dataset.line] = s.value; });
     const expense = {...(p.expense || {}), signers, start, lines, thresholds: $("#x-own").checked ? readThr("p") : null};
-    const signatories = {...(p.signatories || {}), pmPositionCode: $("#s-pm").value, othersHiredBy: "pm", pmHiredBy: {name: $("#s-name").value.trim(), capacity: $("#s-cap").value.trim(), gender: $("#s-g").value}};
+    const signatories = {...(p.signatories || {}), pmPositionCode: $("#s-pm").value, othersHiredBy: "pm", pmHiredBy: {...((p.signatories || {}).pmHiredBy || {}), name: $("#s-name").value.trim(), capacity: $("#s-cap").value.trim(), gender: $("#s-g").value}};
     const projRequired = [...document.querySelectorAll('input[name="projreq"]:checked')].map(i => i.value);
     try{ await db.doc("projects/" + p.code).update({expense, signatories, projRequired}); editing = false; notice(""); render(true); const mm = $("#xp-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; } }
     catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
@@ -2975,6 +3113,7 @@ async function makeAllContracts(){
   out.textContent = `أُنشئ ${ok} عقد` + (bad ? `، وتعذّر ${bad}. راجع رسالة كل بطاقة.` : ".");
 }
 document.addEventListener("change", e => {
+  if(e.target.name === "sigfile" && e.target.closest(".sigslot")){ uploadSig(e.target); return; }
   if(e.target.name === "dpreset" || e.target.name === "cpreset"){ const box = e.target.closest(".dutyui") || e.target.closest("fieldset") || e.target.closest(".card");
     const ta = box && box.querySelector(e.target.name === "dpreset" ? '[name="dtext"]' : '[name="cDuties"]'); if(ta && e.target.value){ ta.value = (duties[e.target.value] || []).join("\n"); const nm = box.querySelector(e.target.name === "dpreset" ? '[name="dname"]' : '[name="cname"]'); if(nm) nm.value = e.target.value; } editing = true; }
   if(e.target.dataset && e.target.dataset.sg && e.target.name === "n" && e.target.tagName === "SELECT") signerFill(e.target);
@@ -3040,7 +3179,7 @@ document.addEventListener("click", e => {
   else if(t.dataset.pb) saveBasics();
   else if(t.dataset.goto){ const el = document.getElementById(t.dataset.goto); if(el){ if(el.tagName === "DETAILS") el.open = true; el.scrollIntoView({block: "start", behavior: "smooth"}); } }
   else if(t.dataset.closeerr !== undefined){ $("#errbox").hidden = true; }
-  else if(t.id === "tsMakeBtn" || t.id === "prMakeBtn"){ editing = true; busy(t, () => t.id === "tsMakeBtn" ? tsMake(t) : prMake(t)).finally(() => { t.disabled = false; editing = false; setTimeout(() => render(true), 600); }); }
+  else if(t.id === "tsMakeBtn" || t.id === "prMakeBtn"){ editing = true; busy(t, () => t.id === "tsMakeBtn" ? tsMake(t) : prMake(t)).finally(() => { t.disabled = false; editing = false; setTimeout(() => { render(true); if(doneMsg){ notice(doneMsg); const m = $(t.id === "tsMakeBtn" ? "#ts-msg" : "#pr-msg"); if(m){ m.className = "msg ok"; m.textContent = doneMsg; } doneMsg = ""; } }, 600); }); }
   else if(t.dataset.renum){ const k = t.dataset.renum, put = (x, err) => { const m = $("#doc-msg-" + k); if(m){ m.className = "msg" + (err ? " err" : " ok"); m.textContent = x; } if(err) notice("إعادة الترقيم: " + x, true); };
     busy(t, async () => { await renumberDocs(put); const p = projects[current]; if(p && !docMismatch(p, receiptUnits(p)).length) put("تمت إعادة الترقيم. يمكنك الدمج الآن."); }); }
   else if(t.id === "renumber"){ const m = $("#doc-msg-list"); busy(t, () => renumberDocs((x, err) => { m.className = "msg" + (err ? " err" : ""); m.textContent = x; })); }
