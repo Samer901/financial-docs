@@ -151,7 +151,8 @@
   };
 
   /* ---------- مخزن البيانات (ملف JSON على الدرايف) ---------- */
-  let store = { docs: {} }, dataFileId = null, saveTimer = null, saving = Promise.resolve();
+  let store = { docs: {} }, dataFileId = null, saveTimer = null, saving = Promise.resolve(), knownMod = "";
+  const dirtyPaths = new Set();
   const docL = new Map(), colL = new Map();
   const clone = (o) => (o === undefined ? undefined : JSON.parse(JSON.stringify(o)));
   const segs = (p) => p.split("/");
@@ -175,17 +176,35 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => { saving = saving.then(saveNow).catch((e) => console.error("save failed", e)); }, 500);
   }
+  /* الحفظ الآمن: إذا عدّلت نافذة أو جهاز آخر ملف البيانات منذ آخر تحميل، نأخذ نسخته ونضيف فوقها ما عدّلناه نحن فقط،
+     حتى لا تمسح نافذة قديمة تحديثات غيرها (ومنها تحديثات Claude). */
   async function saveNow() {
-    const blob = new Blob([JSON.stringify(store)], { type: "application/json" });
     setStatus("جارٍ الحفظ…");
-    if (dataFileId) await multipart({}, blob, "PATCH", dataFileId);
-    else { const r = await multipart({ name: DATA_NAME, parents: [ROOT], mimeType: "application/json" }, blob); dataFileId = r.id; }
+    if (dataFileId) {
+      try {
+        const meta = await (await gfetch(`${API}/files/${dataFileId}?fields=modifiedTime`)).json();
+        if (knownMod && meta.modifiedTime && meta.modifiedTime !== knownMod) {
+          const remote = await (await gfetch(`${API}/files/${dataFileId}?alt=media`)).json();
+          const docs = { ...((remote && remote.docs) || {}) };
+          for (const p of dirtyPaths) { if (store.docs[p] === undefined) delete docs[p]; else docs[p] = store.docs[p]; }
+          store = { ...(remote || {}), docs };
+          notifyAll();
+        }
+      } catch (e) { console.error("merge-before-save", e); }
+    }
+    const sent = new Set(dirtyPaths);
+    const blob = new Blob([JSON.stringify(store)], { type: "application/json" });
+    let r;
+    if (dataFileId) r = await multipart({}, blob, "PATCH", dataFileId);
+    else { r = await multipart({ name: DATA_NAME, parents: [ROOT], mimeType: "application/json" }, blob); dataFileId = r.id; }
+    if (r && r.modifiedTime) knownMod = r.modifiedTime;
+    sent.forEach((p) => dirtyPaths.delete(p));
     setStatus("");
   }
   async function flush() { clearTimeout(saveTimer); saving = saving.then(saveNow); return saving; }
   window.addEventListener("beforeunload", (e) => { if (saveTimer) { e.preventDefault(); e.returnValue = ""; } });
 
-  function write(path, fn) { store.docs[path] = fn(store.docs[path]); if (store.docs[path] === undefined) delete store.docs[path]; notify(path); scheduleSave(); }
+  function write(path, fn) { store.docs[path] = fn(store.docs[path]); if (store.docs[path] === undefined) delete store.docs[path]; dirtyPaths.add(path); notify(path); scheduleSave(); }
   function docRef(path) {
     return {
       id: segs(path).pop(), path,
@@ -213,13 +232,13 @@
   }
   async function loadData() {
     const f = await findFiles(`'${ROOT}' in parents and name = '${DATA_NAME}' and trashed = false`);
-    if (f.length) { dataFileId = f[0].id; store = await (await gfetch(`${API}/files/${dataFileId}?alt=media`)).json(); if (!store.docs) store = { docs: {} }; }
+    if (f.length) { dataFileId = f[0].id; knownMod = f[0].modifiedTime || ""; store = await (await gfetch(`${API}/files/${dataFileId}?alt=media`)).json(); if (!store.docs) store = { docs: {} }; }
     await applyInbox();
   }
   async function applyInbox() {
     const files = await findFiles(`'${ROOT}' in parents and name contains '${INBOX_PREFIX}' and trashed = false`);
     if (!files.length) return 0;
-    let n = 0;
+    let n = 0; const done = [];
     for (const file of files.reverse()) {
       try {
         const ops = await (await gfetch(`${API}/files/${file.id}?alt=media`)).json();
@@ -227,12 +246,14 @@
           if (o.op === "set") store.docs[o.path] = clone(o.data);
           else if (o.op === "merge" || o.op === "update") store.docs[o.path] = deepMerge(store.docs[o.path], o.data || {});
           else if (o.op === "delete") delete store.docs[o.path];
-          n++;
+          dirtyPaths.add(o.path); n++;
         }
-        await tools.trash_file({ fileId: file.id });
+        done.push(file.id);
       } catch (e) { console.error("inbox", e); }
     }
-    if (n) { notifyAll(); await saveNow(); }
+    if (n) { notifyAll(); clearTimeout(saveTimer); saving = saving.then(saveNow); await saving; }
+    // لا يُنقل ملف التحديث إلى السلة إلا بعد حفظ البيانات فعلياً
+    for (const id of done) await tools.trash_file({ fileId: id }).catch(() => {});
     return n;
   }
   window.addEventListener("focus", () => { if (token) applyInbox().then((n) => n && setStatus(`تم دمج ${n} تحديث من Claude`, 4000)).catch(() => {}); });
