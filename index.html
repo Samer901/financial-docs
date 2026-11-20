@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795174245";</script>
+<script>window.APP_VERSION = "1795174516";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -504,7 +504,7 @@ async function addStaff(btn){
     let id = code; const same = (p.positions || []).filter(x => x.code === code);
     if(same.length){ let n = same.length + 1; while((p.positions || []).some(x => pid(x) === code + "-" + n)) n++; id = code + "-" + n; }
     const sal = F(box,"lsal").value;
-    const line = {code, id, title, unit: F(box,"lunit").value.trim(), group: STAFF_GROUP, req: ["id","cv"], salary: sal ? Number(sal) : "",
+    const line = {code, id, title, unit: F(box,"lunit").value.trim(), group: STAFF_GROUP, req: ["id"], salary: sal ? Number(sal) : "",
       title_m: F(box,"ltm").value.trim() || title.replace("/ة",""), title_f: F(box,"ltf").value.trim() || title.replace("/ة","ة"), duties: F(box,"ldt").value, added: true, addedAt: today()};
     const positions = [...(p.positions || []), line].sort((a,b) => a.code.localeCompare(b.code, undefined, {numeric:true}));
     await db.doc("projects/" + p.code).update({positions});
