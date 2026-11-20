@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795178304";</script>
+<script>window.APP_VERSION = "1795178646";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -534,18 +534,19 @@ function personOptions(sel){
 const PERSON_TYPES = ["شهادة مزاولة مهنة", "شهادة علمية", "مستند شخصي آخر"];
 const PROJECT_TYPES = ["Vetting", "ملحق المانح", "مستند آخر للمشروع"];
 const today = () => new Date().toISOString().slice(0,10);
-const dlink = (id, label) => `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener">${esc(label)}</a><button type="button" class="prbtn" data-print="${esc(id)}" title="طباعة نسخة واحدة" aria-label="طباعة ${esc(label)}">🖨 طباعة</button>`;
+const dlink = (id, label, np) => `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener">${esc(label)}</a>${np ? "" : `<button type="button" class="prbtn" data-print="${esc(id)}" title="طباعة نسخة واحدة" aria-label="طباعة ${esc(label)}">🖨 طباعة</button>`}`;
 /* طباعة مباشرة: يُجلب الملف من الدرايف، ويُحوَّل Word/Excel/الصور إلى PDF، ثم يُفتح مربع الطباعة بنسخة واحدة */
 async function printFile(id){
-  const u = await fetchBytes(id); let pdf = null;
+  let u = null; try{ u = await fetchBytes(id); }catch(_){} if(!u || !u.length || u[0] === 0x7B || u[0] === 0x3C) u = await fetchExport(id); let pdf = null;
   if(u[0] === 0x25 && u[1] === 0x50) pdf = u;
   else if(u[0] === 0x50 && u[1] === 0x4B){
     const zip = await JSZip.loadAsync(u), isX = !!zip.file("xl/workbook.xml");
+    let pgx = null; if(isX){ let t = ""; for(let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); pgx = await pageOf({b64: btoa(t)}); if(pgx.range) u = await trimForPdf(u, pgx.range); }
     let b64 = ""; for(let i = 0; i < u.length; i += 0x8000) b64 += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); b64 = btoa(b64);
     const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", WT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     const gid = payloadId(await mcp.callTool("Google Drive", "create_file", {title: "طباعة مؤقتة", contentMimeType: isX ? XT : WT, base64Content: b64}));
     try{
-      const ex = await mcp.callTool("Google Drive", "download_file_content", isX ? {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf({b64})} : {fileId: gid, exportMimeType: "application/pdf"});
+      const ex = await mcp.callTool("Google Drive", "download_file_content", isX ? {fileId: gid, exportMimeType: "application/pdf", sheetPdf: pgx} : {fileId: gid, exportMimeType: "application/pdf"});
       const p64 = findB64(ex, 0).replace(/\s/g, ""), bin = atob(p64); pdf = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) pdf[i] = bin.charCodeAt(i);
     } finally { await trash(gid); }
   } else pdf = await toPdfBytes(id);
@@ -901,7 +902,7 @@ const shortName = v => v.shortName || (() => { const t=(v.name||"").trim().split
 const xmlEsc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
 const DOCX_T = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const editLink = id => `<a href="https://docs.google.com/document/d/${esc(id)}/edit" target="_blank" rel="noopener">تعديل Word</a>`;
+const editLink = (id, np) => `<a href="https://docs.google.com/document/d/${esc(id)}/edit" target="_blank" rel="noopener">تعديل Word</a>${np ? "" : `<button type="button" class="prbtn" data-print="${esc(id)}" title="طباعة نسخة واحدة">🖨 طباعة</button>`}`;
 async function wordToPdf(wordId, folder, base, marks){
   const r = await mcp.callTool("Google Drive", "download_file_content", {fileId: wordId});
   const b64 = findB64(r, 0).replace(/\s/g, ""); if(!b64) throw {code:"tool_error", message:"تعذّر تحميل ملف Word من الدرايف."};
@@ -935,7 +936,7 @@ const linesOf = t => String(t || "").split("\n").map(x => x.trim()).filter(Boole
 
 function contractBox(p, pos, a){
   const cd = contractDoc(a);
-  const links = cd ? `<span class="current">العقد: ${cd.fileId ? dlink(cd.fileId, "PDF") : '<span class="review">PDF غير منشأ</span>'}${cd.wordId ? " · " + editLink(cd.wordId) : ""}</span>` : "";
+  const links = cd ? `<span class="current">العقد: ${cd.fileId ? dlink(cd.fileId, "PDF") : '<span class="review">PDF غير منشأ</span>'}${cd.wordId ? " · " + editLink(cd.wordId, cd.fileId) : ""}</span>` : "";
   const dis = a && a.personKey ? "" : "disabled";
   const dl = (a && a.duties && a.duties.length) ? a.duties : (duties[pos.duties] || []);
   return `<div class="cpart"><h4>بيانات البند</h4><div class="sgrid">
@@ -1232,7 +1233,7 @@ function renderTimesheets(p){
   const hol = holidays.filter(d => d.startsWith(tsMonth)).map(d => +d.slice(8));
   const rows = staffOf(p).map(({pos, v, id}) => `<tr data-tsid="${esc(id)}"><td class="code">${esc(pos.code)}</td><td>${esc(v.name)}</td>
      <td>${dayGrid("lv-" + id, y, m, cfg.weekend, leave[id] || [], hol)}</td>
-     <td>${files[id] ? dlink(files[id].pdf || files[id].xlsx, "PDF") + (files[id].xlsx ? " · " + dlink(files[id].xlsx, "Excel") : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("");
+     <td>${files[id] ? dlink(files[id].pdf || files[id].xlsx, "PDF") + (files[id].xlsx ? " · " + dlink(files[id].xlsx, "Excel", 1) : "") : '<span class="code">لم يُنشأ</span>'}</td></tr>`).join("");
   box.innerHTML = `<details class="settings panel" ${open || !box.innerHTML ? "open" : ""}><summary><span>جداول الدوام الشهرية — ${monLabel(tsMonth)}</span></summary>
     <div class="sgrid">
       <div><label>الشهر</label>${monthPick("ts", tsMonth)}</div>
@@ -1544,7 +1545,7 @@ function renderPayroll(p){
       <div><label>بند المسؤول المالي (يوقّع كمحاسب)</label><select id="pr-fin"><option value="">—</option>${(p.positions||[]).filter(isStaff).map(x => `<option value="${esc(pid(x))}" ${pid(x)===finPos?"selected":""}>${esc(x.code)} — ${esc(x.title)}</option>`).join("")}</select></div>
     </div>
     <div class="tscroll"><table class="ptab"><thead><tr><th>البند</th><th>الموظف</th><th>الراتب</th><th>سلفة</th><th>قرض</th><th>ملاحظات</th><th>الإيصال</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="code">لا يوجد موظفون لهم عقود.</td></tr>'}</tbody></table></div>
-    <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel") : "") : ""}</span>
+    <div class="row"><span class="current">${f.payroll ? "جدول الرواتب: " + link(f.payroll, "PDF") + (f.payroll.xlsx ? " · " + dlink(f.payroll.xlsx, "Excel", 1) : "") : ""}</span>
       <span><span id="pr-msg" class="msg" aria-live="polite"></span> <button type="button" class="ghost" id="prSave">حفظ</button> <button type="button" id="prMakeBtn">إنشاء الرواتب والإيصالات</button> <button type="button" class="x" data-delmonth="pr">حذف رواتب الشهر</button></span></div>
   </details>`;
 }
@@ -1607,10 +1608,26 @@ async function pageOf(tpl){
   }
   return tpl.page = o;
 }
+/* نسخة التحويل فقط: حذف كل ما خارج حدود المحتوى (خلايا، دمج، أعمدة) كي لا يصغّر Google الصفحة */
+async function trimForPdf(u8, range){
+  const zip = await JSZip.loadAsync(u8), f = "xl/worksheets/sheet1.xml"; let sx = await zip.file(f).async("string");
+  const R = range[2], C = range[3], cn = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  const out = a => { const m = a.match(/([A-Z]+)(\d+)/); return +m[2] > R || cn(m[1]) > C; };
+  sx = sx.replace(/<c r="([A-Z]+\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g, (all, r) => out(r) ? "" : all);
+  sx = sx.replace(/<row r="(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g, (all, r) => +r > R ? "" : all);
+  sx = sx.replace(/<mergeCell ref="([A-Z]+\d+):[A-Z]+\d+"\/>/g, (all, a) => out(a) ? "" : all);
+  sx = sx.replace(/<mergeCells count="\d+">/, () => `<mergeCells count="${(sx.match(/<mergeCell ref=/g) || []).length}">`);
+  sx = sx.replace(/<col min="(\d+)" max="(\d+)"([^>]*)\/>/g, (all, a, b, rest) => +a > C ? "" : +b > C ? `<col min="${a}" max="${C}"${rest}/>` : all);
+  sx = sx.replace(/<cols>\s*<\/cols>/, "");
+  sx = sx.replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:${String.fromCharCode(64 + Math.min(C, 26))}${R}"/>`);
+  sx = sx.replace(/<conditionalFormatting[\s\S]*?<\/conditionalFormatting>/g, "").replace(/<dataValidations[\s\S]*?<\/dataValidations>/g, "");
+  zip.file(f, sx); return zip.generateAsync({type: "uint8array"});
+}
 async function saveXP(blob, folder, base, tpl, marks){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
-  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+  const pg = await pageOf(tpl), src = pg.range ? new Blob([await trimForPdf(new Uint8Array(await blob.arrayBuffer()), pg.range)]) : blob;
+  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(src); });
   const gr = await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64});
   const gid = payloadId(gr); let pdf = "";
   try{
@@ -2530,7 +2547,7 @@ function exCard(p, e){
       <textarea name="cDuties" rows="6" style="width:100%" placeholder="مهمة في كل سطر">${esc(f.cDuties || "")}</textarea>
       <div class="inl"><label class="chk"><input type="checkbox" name="csave"> حفظ هذه المهام كقالب باسم</label><input name="cname" value="${esc((line || {}).title_m || "")}" style="max-width:220px"></div></div>
       <div class="inl"><button type="button" class="ghost" data-ex="genword">إنشاء Word فقط</button>
-        ${(files.CONTRACT || {}).word ? `${editLink(files.CONTRACT.word)} <button type="button" class="ghost" data-ex="c2pdf">تحويل إلى PDF</button>${files.CONTRACT.pdf ? "" : ' <span class="review">PDF غير منشأ</span>'}` : ""}</div>
+        ${(files.CONTRACT || {}).word ? `${editLink(files.CONTRACT.word, files.CONTRACT.pdf)} <button type="button" class="ghost" data-ex="c2pdf">تحويل إلى PDF</button>${files.CONTRACT.pdf ? "" : ' <span class="review">PDF غير منشأ</span>'}` : ""}</div>
       <div class="file"><label style="margin:0">أو ارفع العقد الموقّع (يحل محل المولَّد)</label><input type="file" name="up_CONTRACT" accept="application/pdf,image/jpeg,image/png"></div>`)}
     ${sec("GRN", "GRN — محضر استلام مواد", `<div class="sgrid">${inp("grnDate", "تاريخ الاستلام", f.grnDate, "date")}${inp("grnLoc", "موقع الاستلام", f.grnLoc ?? "مكتب")}${inp("supInv", "رقم فاتورة المورد", f.supInv)}</div>`)}
     ${sec("SRN", "SRN — محضر استلام خدمة", `<div class="sgrid">${inp("srnDate", "التاريخ", f.srnDate, "date")}${has("CONTRACT") ? "" : inp("contractNo", "رقم العقد", f.contractNo)}${inp("srnPct", "النسبة من العمل الكلي %", f.srnPct ?? 100, "number")}</div>`)}
@@ -2848,7 +2865,7 @@ function renderReport(p){
     ${rateRows(rates, tx)}
     <p class="code">المبلغ المعتمد والمبالغ المستلمة واسم المنظمة تُعدَّل من تبويب «المشروع» ← البيانات الأساسية.</p>
     <p class="code">عدد الحركات: ${tx.length} · المجموع: ${tx.reduce((s, t) => s + t.amount, 0).toLocaleString("en-US")}${missing.length ? ` · <span class="review">ينقص سعر صرف: ${missing.map(monLabel).join("، ")}</span>` : ""}</p>
-    <div class="row"><span class="current">${last ? "آخر تقرير لهذا الشهر: " + dlink(last.xlsx, "Excel") + (last.pdf ? " · " + dlink(last.pdf, "PDF") : "") : ""}</span>
+    <div class="row"><span class="current">${last ? "آخر تقرير لهذا الشهر: " + dlink(last.xlsx, "Excel", last.pdf) + (last.pdf ? " · " + dlink(last.pdf, "PDF") : "") : ""}</span>
       <span><span id="rp-msg" class="msg" aria-live="polite"></span> <button type="button" data-rp="make">إنشاء التقرير</button></span></div>
   </details>`;
 }
