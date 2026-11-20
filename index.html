@@ -216,6 +216,7 @@ details.excard{border-radius:10px}
 .spane{background:var(--surface);border:1px solid var(--line);border-radius:12px;min-width:0}
 .shead{padding:22px 24px 4px}.shead h2{margin:0;font-size:22px}.shead p{margin:4px 0 0;color:var(--muted);font-size:14px}
 .sstep{padding:0 6px}
+.prbtn{margin-inline-start:6px;padding:1px 8px;font-size:12px;min-height:0;line-height:1.6;background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:6px;cursor:pointer}.prbtn:hover{background:var(--line)}
 .spane details.panel{border:0;background:transparent}
 .spane details.panel > summary{display:none}
 .spane details.panel + details.panel{border-top:1px solid var(--line);margin-top:8px}
@@ -286,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795177801";</script>
+<script>window.APP_VERSION = "1795178304";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -533,7 +534,28 @@ function personOptions(sel){
 const PERSON_TYPES = ["شهادة مزاولة مهنة", "شهادة علمية", "مستند شخصي آخر"];
 const PROJECT_TYPES = ["Vetting", "ملحق المانح", "مستند آخر للمشروع"];
 const today = () => new Date().toISOString().slice(0,10);
-const dlink = (id, label) => `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener">${esc(label)}</a>`;
+const dlink = (id, label) => `<a href="https://drive.google.com/file/d/${esc(id)}/view" target="_blank" rel="noopener">${esc(label)}</a><button type="button" class="prbtn" data-print="${esc(id)}" title="طباعة نسخة واحدة" aria-label="طباعة ${esc(label)}">🖨 طباعة</button>`;
+/* طباعة مباشرة: يُجلب الملف من الدرايف، ويُحوَّل Word/Excel/الصور إلى PDF، ثم يُفتح مربع الطباعة بنسخة واحدة */
+async function printFile(id){
+  const u = await fetchBytes(id); let pdf = null;
+  if(u[0] === 0x25 && u[1] === 0x50) pdf = u;
+  else if(u[0] === 0x50 && u[1] === 0x4B){
+    const zip = await JSZip.loadAsync(u), isX = !!zip.file("xl/workbook.xml");
+    let b64 = ""; for(let i = 0; i < u.length; i += 0x8000) b64 += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); b64 = btoa(b64);
+    const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", WT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const gid = payloadId(await mcp.callTool("Google Drive", "create_file", {title: "طباعة مؤقتة", contentMimeType: isX ? XT : WT, base64Content: b64}));
+    try{
+      const ex = await mcp.callTool("Google Drive", "download_file_content", isX ? {fileId: gid, exportMimeType: "application/pdf", sheetPdf: await pageOf({b64})} : {fileId: gid, exportMimeType: "application/pdf"});
+      const p64 = findB64(ex, 0).replace(/\s/g, ""), bin = atob(p64); pdf = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) pdf[i] = bin.charCodeAt(i);
+    } finally { await trash(gid); }
+  } else pdf = await toPdfBytes(id);
+  if(!pdf) throw {code: "tool_error", message: "نوع الملف غير قابل للطباعة."};
+  const url = URL.createObjectURL(new Blob([pdf], {type: "application/pdf"}));
+  document.querySelectorAll("iframe.printframe").forEach(f => f.remove());
+  const fr = document.createElement("iframe"); fr.className = "printframe"; fr.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0";
+  fr.onload = () => setTimeout(() => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(_){ window.open(url, "_blank"); } }, 300);
+  fr.src = url; document.body.appendChild(fr);
+}
 
 const pid = pos => pos.id || pos.code;
 
@@ -3286,6 +3308,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("click", e => {
   const t = e.target.closest("button"); if(!t) return;
+  if(t.dataset.print){ busy(t, async () => { try{ await printFile(t.dataset.print); }catch(err){ const eb = $("#errbox"); eb.hidden = false; eb.textContent = "تعذّرت الطباعة: " + (err && err.message ? err.message : mcpMessage(err)); } }); return; }
   if(t.dataset.pfrep || t.dataset.pfcancel){ const w = t.closest(".pf-have"), nw = w.querySelector(".pf-new"), rep = w.querySelector("[data-pfrep]");
     const on = !!t.dataset.pfrep; nw.hidden = !on; rep.hidden = on; if(!on){ const f = nw.querySelector('input[type="file"]'); if(f) f.value = ""; } editing = true; return; }
   if(t.classList.contains("dday")){ t.classList.toggle("on"); t.setAttribute("aria-pressed", t.classList.contains("on")); editing = true;
