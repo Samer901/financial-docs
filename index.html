@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795175639";</script>
+<script>window.APP_VERSION = "1795177801";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -1573,6 +1573,16 @@ async function pageOf(tpl){
   const rg = dn && dn[2].match(/\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)/);
   const cn = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
   if(rg) o.range = [+rg[2] - 1, cn(rg[1]) - 1, +rg[4], cn(rg[3])];
+  else {
+    // بلا منطقة طباعة: نطبع حدود المحتوى الفعلي فقط (خلايا فيها نص + دمجها + الصور)، لا خلايا منسّقة فارغة بعيدة تصغّر الصفحة
+    let R = 0, C = 0; const pos = a => { const m = a.match(/([A-Z]+)(\d+)/); return [+m[2], cn(m[1])]; };
+    const full = new Set();
+    for(const m of sx.matchAll(/<c r="([A-Z]+\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/c>)/g)) if(m[2] && /<v>[^<]|<t[^>]*>[^<]/.test(m[2])){ full.add(m[1]); const [r, c] = pos(m[1]); R = Math.max(R, r); C = Math.max(C, c); }
+    for(const m of sx.matchAll(/<mergeCell ref="([A-Z]+\d+):([A-Z]+\d+)"/g)) if(full.has(m[1])){ const [r, c] = pos(m[2]); R = Math.max(R, r); C = Math.max(C, c); }
+    for(const f of Object.keys(zip.files).filter(n => /^xl\/drawings\/drawing\d+\.xml$/.test(n))){ const dx = await zip.file(f).async("string");
+      for(const m of dx.matchAll(/<xdr:to><xdr:col>(\d+)<\/xdr:col>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/g)){ R = Math.max(R, +m[2] + 1); C = Math.max(C, +m[1] + 1); } }
+    if(R && C) o.range = [0, 0, R, C];
+  }
   return tpl.page = o;
 }
 async function saveXP(blob, folder, base, tpl, marks){
