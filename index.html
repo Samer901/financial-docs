@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795174516";</script>
+<script>window.APP_VERSION = "1795175041";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -994,7 +994,8 @@ async function makeContract(btn){
   if(!mcp) return say("الوصول إلى Google Drive غير متاح في هذا العرض.", true);
   if(v.status !== "read") return say("الهوية لم تُقرأ ويُتحقق منها بعد.", true);
   if(!v.gender) return say("جنس الموظف غير مسجّل.", true);
-  if(!c.start || !c.end || !c.currency) return say("أكمل إعدادات العقود للمشروع أولاً (في أعلى الصفحة).", true);
+  if(!c.start || !c.end || !c.currency){ const miss = [!c.start && "بداية العقد", !c.end && "نهاية العقد", !c.currency && "العملة"].filter(Boolean).join("، ");
+    return say(`ينقص في «المشروع ← إعدادات العقود»: ${miss}.`, true); }
   { const tmI = cardEl.querySelector('[name="ptm"]'); if(tmI){ try{ await saveCardContract(cardEl, p, pos); }catch(_){} const np = (projects[current].positions || []).find(x => pid(x) === pid(pos)); if(np) Object.assign(pos, np); } }
   if(!pos.salary) return say("أدخل الراتب الشهري في بيانات البند.", true);
   if(!pos.title_m || !pos.title_f) return say("أدخل المسمى في العقد (مذكر ومؤنث).", true);
