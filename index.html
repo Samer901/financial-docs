@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795175196";</script>
+<script>window.APP_VERSION = "1795175639";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -2041,7 +2041,7 @@ function renderBasics(p){
   if(!p){ box.innerHTML = ""; return; }
   const c = p.contract || {}, ex = p.expense || {}, mi = missingInfo(p).basics;
   const f = (id, l, v, t, x) => `<div><label for="${id}">${l}</label><input id="${id}" ${t ? `type="${t}"` : ""} value="${esc(v ?? "")}" ${x || ""}></div>`;
-  box.innerHTML = `<details class="settings panel" id="sec-basics" ${mi.length ? "open" : ""}><summary><span>البيانات الأساسية</span>${badge(mi)}</summary>
+  box.innerHTML = `<details class="settings panel" id="sec-basics" open><summary><span>البيانات الأساسية</span>${badge(mi)}</summary>
     <div class="phead"><span id="pb-msg" class="msg"></span><button type="button" data-pb="save">حفظ</button></div>
     <div class="sgrid">
       ${f("pb-name", "اسم المشروع", p.name)}${f("pb-donor", "المانح", p.donor)}<div><label>رمز الاتفاقية</label><input value="${esc(p.code)}" disabled></div>
@@ -2060,6 +2060,21 @@ function stepBasicsData(p){
   if($("#c-start")) Object.assign(c, {label: v("c-label"), months: Number(v("c-months")) || "", start: v("c-start"), end: v("c-end"), date: v("c-date")});
   o.contract = c; return o;
 }
+let basicsTimer = null;
+function basicsAutoSave(){
+  clearTimeout(basicsTimer);
+  basicsTimer = setTimeout(async () => {
+    const p = projects[current]; if(!p) return;
+    const ms = ["#pb-msg", "#set-msg"].map(id => $(id)).filter(Boolean);
+    try{
+      await db.doc("projects/" + p.code).update(stepBasicsData(p));
+      ms.forEach(mm => { mm.className = "msg ok"; mm.textContent = "حُفظ ✓"; });
+      const a = document.activeElement; if(!(a && (a.closest("#settings") || a.closest("#projBasics")))) editing = false;
+    }catch(e){ ms.forEach(mm => { mm.className = "msg err"; mm.textContent = "تعذّر الحفظ — أعد المحاولة."; }); }
+  }, 300);
+}
+document.addEventListener("input", e => { if(e.target.closest && (e.target.closest("#settings") || e.target.closest("#projBasics"))) editing = true; }, true);
+document.addEventListener("change", e => { if(e.target.closest && (e.target.closest("#settings") || e.target.closest("#projBasics")) && e.target.id) basicsAutoSave(); }, true);
 async function saveBasics(){
   const p = projects[current], m = $("#pb-msg");
   try{
@@ -2087,7 +2102,7 @@ function renderSettings(p){
   const sets = Object.keys(duties);
   const setOpts = sel => `<option value="">— بلا عقد —</option>` + sets.map(k => `<option ${k===sel?"selected":""}>${esc(k)}</option>`).join("");
   const mi = missingInfo(p).contracts;
-  box.innerHTML = `<details class="settings panel" id="sec-contracts" ${mi.length ? "open" : ""}><summary><span>إعدادات العقود العامة</span>${badge(mi)}</summary>
+  box.innerHTML = `<details class="settings panel" id="sec-contracts" open><summary><span>إعدادات العقود العامة</span>${badge(mi)}</summary>
     <div class="phead"><span id="set-msg" class="msg"></span><button type="button" id="saveSettings">حفظ</button></div>
     <div class="sgrid">
       <div><label>اسم المشروع كما يُكتب في العقد</label><input id="c-label" value="${esc(c.label||"")}" placeholder="اتركه فارغاً إن لم يوجد"></div>
