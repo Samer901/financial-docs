@@ -286,7 +286,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795175041";</script>
+<script>window.APP_VERSION = "1795175196";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -2051,13 +2051,20 @@ function renderBasics(p){
     </div>
   </details>`;
 }
+/* البيانات الأساسية وإعدادات العقود في نفس الخطوة: أي زر «حفظ» يحفظ القسمين معاً حتى لا تضيع تعديلات أحدهما عند إعادة الرسم */
+function stepBasicsData(p){
+  const v = id => { const e = $("#" + id); return e ? e.value.trim() : null; }, n = id => { const x = v(id); return x === "" || x === null ? "" : Number(x); };
+  const o = {}, c = {...(p.contract || {})};
+  if($("#pb-name")){ Object.assign(o, {name: v("pb-name"), donor: v("pb-donor"), start: v("pb-start"), end: v("pb-end")}); c.currency = v("pb-cur");
+    o.expense = {...(p.expense || {}), projectCode: v("pb-code"), orgEn: v("pb-org"), office: v("pb-office"), approvedEur: n("pb-appr"), receivedEur: n("pb-recv")}; }
+  if($("#c-start")) Object.assign(c, {label: v("c-label"), months: Number(v("c-months")) || "", start: v("c-start"), end: v("c-end"), date: v("c-date")});
+  o.contract = c; return o;
+}
 async function saveBasics(){
-  const p = projects[current], m = $("#pb-msg"), v = id => $("#" + id).value.trim(), n = id => v(id) === "" ? "" : Number(v(id));
+  const p = projects[current], m = $("#pb-msg");
   try{
-    await db.doc("projects/" + p.code).update({name: v("pb-name"), donor: v("pb-donor"), start: v("pb-start"), end: v("pb-end"),
-      contract: {...(p.contract || {}), currency: v("pb-cur")},
-      expense: {...(p.expense || {}), projectCode: v("pb-code"), orgEn: v("pb-org"), office: v("pb-office"), approvedEur: n("pb-appr"), receivedEur: n("pb-recv")}});
-    editing = false; render(true); const mm = $("#pb-msg"); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; }
+    await db.doc("projects/" + p.code).update(stepBasicsData(p));
+    editing = false; render(true); ["#pb-msg", "#set-msg"].forEach(id => { const mm = $(id); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; } });
   }catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
 }
 function renderDuties(){
@@ -2101,9 +2108,7 @@ async function saveSettings(){
     const sal = q("sal"); o.salary = sal ? Number(sal) : "";
     return o;
   });
-  const contract = {...(p.contract || {}), label: $("#c-label").value.trim(), months: Number($("#c-months").value) || "",
-    start: $("#c-start").value.trim(), end: $("#c-end").value.trim(), date: $("#c-date").value.trim()};
-  try{ await db.doc("projects/" + p.code).update({positions, contract}); editing = false; m.className = "msg ok"; m.textContent = "تم الحفظ."; }
+  try{ await db.doc("projects/" + p.code).update({positions, ...stepBasicsData(p)}); editing = false; render(true); ["#pb-msg", "#set-msg"].forEach(id => { const mm = $(id); if(mm){ mm.className = "msg ok"; mm.textContent = "تم الحفظ."; } }); }
   catch(e){ m.className = "msg err"; m.textContent = "تعذّر الحفظ."; }
 }
 
@@ -3125,6 +3130,7 @@ async function saveBudget(){
 async function stepSave(){
   const pane = document.querySelector(`.sstep[data-step="${step}"]`); if(!pane) return;
   if(step === "staff"){ await saveAll(); return; }
+  if(step === "basics"){ await saveBasics(); return; }
   for(const b of pane.querySelectorAll(".phead button:not(.ghost):not([disabled])")){ b.click(); await new Promise(r => setTimeout(r, 600)); }
 }
 function goStep(k){ step = k; page = "setup"; editing = false; setHash(); render(true); window.scrollTo({top: 0}); }
