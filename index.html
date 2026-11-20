@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795178646";</script>
+<script>window.APP_VERSION = "1795184386";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -1623,6 +1623,18 @@ async function trimForPdf(u8, range){
   sx = sx.replace(/<conditionalFormatting[\s\S]*?<\/conditionalFormatting>/g, "").replace(/<dataValidations[\s\S]*?<\/dataValidations>/g, "");
   zip.file(f, sx); return zip.generateAsync({type: "uint8array"});
 }
+/* تحويل Excel مملوء إلى PDF (بايتات) بإعدادات القالب، دون حفظ ملف Excel */
+async function xlsxPdfBytes(blob, folder, base, tpl){
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const pg = await pageOf(tpl), src = pg.range ? new Blob([await trimForPdf(new Uint8Array(await blob.arrayBuffer()), pg.range)]) : blob;
+  const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = () => rej(r.error); r.readAsDataURL(src); });
+  const gid = payloadId(await mcp.callTool("Google Drive", "create_file", {title: base + " (مؤقت)", parentId: folder, contentMimeType: XT, base64Content: b64}));
+  try{
+    const p64 = findB64(await mcp.callTool("Google Drive", "download_file_content", {fileId: gid, exportMimeType: "application/pdf", sheetPdf: pg}), 0).replace(/\s/g, "");
+    if(!p64) throw {code: "tool_error", message: "تعذّر تحويل " + base + " إلى PDF."};
+    const bin = atob(p64), u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u;
+  } finally { await trash(gid).catch(() => {}); }
+}
 async function saveXP(blob, folder, base, tpl, marks){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const xu = await upload(new File([blob], base + ".xlsx", {type: XT}), folder, base);
@@ -1905,7 +1917,7 @@ function receiptUnits(p){
       u.push({key: `pay:${d.month}:${id}`, date: monthEnd(d.month), month: d.month, line: pos.code, desc: `${pos.titleEn || pos.title} salary - ${MON_EN[m - 1]} ${y}`, amount: num(pos.salary), label: `${pos.code} - ${v ? v.name : pos.title}`, parts});
     });
   });
-  exOf(p).filter(e => (e.files || {}).RCPT && (e.f || {}).rcptDate).forEach(e => {
+  exOf(p).filter(e => ((e.files || {}).RCPT || (e.files || {}).TRN) && (e.f || {}).rcptDate).forEach(e => {
     const pos = pos0(e.line) || {};
     u.push({key: "ex:" + e.id, date: e.f.rcptDate, month: e.f.rcptDate.slice(0, 7), line: pos.code || "", desc: e.descEn || pos.titleEn || e.title, amount: exTotals(e, true).total, label: `${pos.code ? pos.code + " - " : ""}${e.title}`, parts: exParts(p, e)});
   });
@@ -2122,6 +2134,7 @@ function basicsAutoSave(){
     }catch(e){ ms.forEach(mm => { mm.className = "msg err"; mm.textContent = "تعذّر الحفظ — أعد المحاولة."; }); }
   }, 300);
 }
+document.addEventListener("input", e => { const tc = e.target.closest && e.target.closest("[data-ex-key]"); if(tc && tc.querySelector(".trninfo") && (e.target.name === "trnNames" || e.target.closest("tr[data-it]"))) trnUpd(tc); }, true);
 document.addEventListener("input", e => { if(e.target.closest && (e.target.closest("#settings") || e.target.closest("#projBasics"))) editing = true; }, true);
 document.addEventListener("change", e => { if(e.target.closest && (e.target.closest("#settings") || e.target.closest("#projBasics")) && e.target.id) basicsAutoSave(); }, true);
 async function saveBasics(){
@@ -2200,8 +2213,8 @@ async function saveDuties(){
 
 /* ===== أنشطة المشروع: إعداد بنود الصرف والتوثيقات ===== */
 let expCfg = null, selCats = new Set();
-const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","مستفيدو المواصلات"],["INV","فاتورة (من المورد أو يولّدها النظام)"],["RCPT","إيصال دفع"]];
-const FORM_CODE = {CONTRACT:"Contract", ATT:"Attendance", RCPT:"Receipt"};
+const FORMS = [["PR","طلب شراء"],["RFQ","عرض سعر"],["PO","أمر شراء"],["CONTRACT","عقد"],["GRN","محضر استلام مواد"],["SRN","محضر استلام خدمة"],["ATT","مستفيدو المواصلات"],["INV","فاتورة (من المورد أو يولّدها النظام)"],["RCPT","إيصال دفع"],["TRN","إيصالات تعويض المتدربين (أسماء من Excel)"]];
+const FORM_CODE = {CONTRACT:"Contract", ATT:"Attendance", RCPT:"Receipt", TRN:"Trainee receipts"};
 const DROPPED = ["سند ملكية","صور توثيقية","تقرير عمل أو منتج","ترخيص أو سجل تجاري","إيصال رسمي من الجهة","فاتورة المورد"];
 const NUMBERED = [["PR","طلب الشراء"],["PO","أمر الشراء"],["GRN","محضر استلام المواد"],["SRN","محضر استلام الخدمة"],["RCPT","إيصال الدفع"]];
 const SIGNERS = [["requester","الطالب"],["finance","المراجعة المالية"],["approver","المعتمد"],["receiver","المستلم (GRN)"],["supervisor","المشرف (SRN)"],["accountant","المحاسب (الإيصال)"]];
@@ -2415,7 +2428,7 @@ function thresholdFor(p, amount){
 /* ===== توثيق المصاريف (عمليات الصرف) ===== */
 let expenses = {}; const exOpen = new Set();
 const FORM_TPL = {PR:"12qWdSZPjjusDiaby5mEoA-pKCUWyTrsf", RFQ:"1oHi5wso6NHXPnp6yG-QsDGV9xZyBmqnV", PO:"1iFAXyXHY20nfRdajZdmcz5IrV2yhH2_I", GRN:"1g-H_yHG-OXRffP119W3e5vtMfAlZeTSw",
-  INV:"1Q3tCrozyju8A2Fyaj4MbKY1TxqXQNwN0", RCPT:"1G2RXryPZnqqSGt8KTjMAuSp51X4IVQRF", SRN:"1paJ5g--brYwXGCdvK86O3cfVDItsdR73", ATT:"1pjij7De75nVHEmlJmqvAlzUKlehp-Xu3"};
+  INV:"1Q3tCrozyju8A2Fyaj4MbKY1TxqXQNwN0", RCPT:"1G2RXryPZnqqSGt8KTjMAuSp51X4IVQRF", SRN:"1paJ5g--brYwXGCdvK86O3cfVDItsdR73", ATT:"1pjij7De75nVHEmlJmqvAlzUKlehp-Xu3"}; FORM_TPL.TRN = FORM_TPL.RCPT;
 const UPLOAD_FORMS = []; // كل النماذج تُولَّد؛ العقد يُولَّد من قالب الخبير ويمكن رفع نسخته الموقّعة
 const EXPERT_TPL = "19FU9mah6lSqRgGboaH6PIwOpPuisqmOP";
 /* قوالب خاصة بالمشروع (منظمة أخرى) تتقدم على القوالب العامة */
@@ -2453,7 +2466,7 @@ function exTotals(e, supplier){
   return {sub, total: sub + num(f.delCharge) - num(f.discount)};
 }
 function nextNum(p, type){
-  const used = exOf(p).map(e => num((e.nums || {})[type])).filter(Boolean);
+  const used = exOf(p).flatMap(e => [num((e.nums || {})[type]), type === "RCPT" ? num((e.nums || {}).TRN) : 0]).filter(Boolean);
   const start = num(((p.expense || {}).start || {})[type]) || 1;
   return Math.max(start - 1, ...used, 0) + 1;
 }
@@ -2481,6 +2494,16 @@ function renderExpenses(p){
   </details>`;
 }
 
+const trnList = t => String(t || "").split("\n").map(x => x.trim()).filter(Boolean);
+const trnShare = (t, total) => { const n = trnList(t).length; return n ? Math.round(total / n * 100) / 100 : 0; };
+const cur0 = p => (p.expense || {}).currency || (p.contract || {}).currency || "";
+function trnInfo(t, total, cur){ const n = trnList(t).length; return n ? `${n} متدرب — لكل متدرب ${trnShare(t, total)} ${esc(cur || "")} (إجمالي المصروف ${total} ÷ ${n})` : "لا أسماء بعد."; }
+function trnUpd(card){ const e = exRead(card), info = card.querySelector(".trninfo"); if(info) info.textContent = trnInfo(e.f.trnNames, exTotals(e, true).total, cur0(projects[current])); }
+async function trnReadExcel(file){
+  const wb = XLSX.read(await file.arrayBuffer(), {type: "array"}), ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header: 1, range: "A2:A100000", defval: "", blankrows: false});
+  return rows.map(r => String(r[0] ?? "").trim()).filter(Boolean);
+}
 function exCard(p, e){
   const cat = exCat(p, e), forms = exForms(cat), att = exAttach(cat), f = e.f || {}, files = e.files || {}, k = esc(e.key);
   const line = (p.positions || []).find(x => pid(x) === e.line);
@@ -2558,6 +2581,10 @@ function exCard(p, e){
       ${inp("invNo", "رقم الفاتورة", f.invNo)}${inp("invDate", "تاريخ الفاتورة", f.invDate, "date")}</div>
       ${f.invSrc !== "system" ? `<div class="file"><label style="margin:0">فاتورة المورد</label><input type="file" name="up_INV" accept="application/pdf,image/jpeg,image/png"></div>` : ""}`)}
     ${sec("RCPT", "Receipt — إيصال دفع", `<div class="sgrid">${inp("rcptDate", "تاريخ الإيصال (يحدد شهر العملية)", f.rcptDate, "date")}${inp("rcptPurpose", "الهدف في الإيصال", f.rcptPurpose, "", 'placeholder="افتراضياً: الهدف / الوصف"')}</div>`)}
+    ${sec("TRN", "إيصالات تعويض المتدربين — ملف PDF واحد", `${has("RCPT") ? "" : `<div class="sgrid">${inp("rcptDate", "تاريخ الإيصالات (يحدد شهر العملية)", f.rcptDate, "date")}${inp("rcptPurpose", "الهدف في الإيصال", f.rcptPurpose, "", 'placeholder="افتراضياً: الهدف / الوصف"')}</div>`}
+      <div class="file"><label style="margin:0">ملف Excel بالأسماء (العمود A من الخلية A2 وما تحتها)</label><input type="file" name="trnFile" accept=".xlsx,.xls,.csv"></div>
+      <label>أسماء المتدربين (اسم في كل سطر — تُملأ من الملف ويمكن تعديلها)</label><textarea name="trnNames" rows="5" style="width:100%">${esc(f.trnNames || "")}</textarea>
+      <div class="code trninfo">${trnInfo(f.trnNames, T.total, cur0(p))}</div>`)}
     ${att.length ? `<fieldset class="exs"><legend>المستندات المرفقة</legend>${att.map(t => `<div class="file"><label style="margin:0">${esc(t)} ${cat.docs[t] === "req" ? '<span class="req">*</span>' : '<span class="code">(اختياري)</span>'}</label>
       ${attFile(e, t) ? dlink(attFile(e, t), (e.att || {})[t] ? "الملف الحالي" : "من ملف الشخص") : ""}<input type="file" name="att" data-type="${esc(t)}" accept="application/pdf,image/jpeg,image/png,.doc,.docx"></div>`).join("")}</fieldset>` : ""}`}
     <div class="review exwarn">${exWarnings(p, e).map(esc).join("<br>")}</div>
@@ -2572,7 +2599,7 @@ function exRead(card){
   const e = JSON.parse(JSON.stringify(expenses[card.dataset.exKey] || {}));
   const v = n => { const el = card.querySelector(`[name="${n}"]`); return el ? el.value.trim() : undefined; };
   e.f = e.f || {};
-  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose","cDate","cStart","cEnd","cDuties"]
+  ["prDate","delDate","rfqMode","rfqDate","rfqEnd","delAddr","delMethod","payC","payG","poDate","delCharge","discount","contractNo","grnDate","grnLoc","supInv","srnDate","srnPct","attPeriod","attList","invSrc","invNo","invDate","rcptDate","rcptPurpose","trnNames","cDate","cStart","cEnd","cDuties"]
     .forEach(n => { const x = v(n); if(x !== undefined) e.f[n] = x; });
   const rp = v("reqPick"); if(rp !== undefined){ if(rp === "__new"){ e.f.reqName = v("reqNew") || ""; e.f.reqTitle = v("reqTitle") || ""; } else { e.f.reqName = rp; e.f.reqTitle = ""; } }
   if(card.querySelector('[name="s_name"]')) e.f.sup = {name: v("s_name"), company: v("s_company"), mobile: v("s_mobile"), email: v("s_email"), addr: v("s_addr"), prof: v("s_prof")};
@@ -2615,11 +2642,11 @@ async function exSave(card, say){
     await db.doc("people/" + pk).set(person); people[pk] = person; e.personKey = pk;
     if(sel.value === "__new"){ const op = document.createElement("option"); op.value = pk; op.textContent = person.name; sel.prepend(op); sel.value = pk; const np = card.querySelector(".newperson"); if(np) np.hidden = true; }
   }
-  const folderNeeded = [...card.querySelectorAll('input[type="file"]')].some(i => i.files && i.files[0] && !["np_id","np_cv"].includes(i.name));
+  const folderNeeded = [...card.querySelectorAll('input[type="file"]')].some(i => i.files && i.files[0] && !["np_id","np_cv","trnFile"].includes(i.name));
   if(folderNeeded){
     const folder = await exFolder(p, e);
     for(const i of card.querySelectorAll('input[type="file"]')){
-      const file = i.files && i.files[0]; if(!file || ["np_id","np_cv"].includes(i.name)) continue;
+      const file = i.files && i.files[0]; if(!file || ["np_id","np_cv","trnFile"].includes(i.name)) continue;
       const t = i.name === "att" ? i.dataset.type : i.name.replace("up_", "");
       say(`جارٍ رفع ${t}…`);
       const u = await upload(file, folder, `${t} - ${e.title || e.id}`);
@@ -2628,7 +2655,7 @@ async function exSave(card, say){
     }
   }
   { const cs = card.querySelector('[name="csave"]'), cn = card.querySelector('[name="cname"]'); if(cs && cs.checked && cn && cn.value.trim()) await savePreset(cn.value.trim(), linesOf(e.f.cDuties)); }
-  e.done = !!(e.files || {}).RCPT;
+  e.done = !!((e.files || {}).RCPT || (e.files || {}).TRN);
   await db.doc("expenses/" + key).set(e);
   expenses[key] = e;
   return e;
@@ -2681,6 +2708,7 @@ function exFill(p, e, code, copy){
 }
 
 async function exGenForm(p, e, code, say){
+  if(code === "TRN") return exGenTrn(p, e, say);
   const tplId = TPL("ex" + code) || FORM_TPL[code];
   const tpl = await loadX(tplId);
   const folder = await exFolder(p, e);
@@ -2700,6 +2728,30 @@ async function exGenForm(p, e, code, say){
   e.files = e.files || {}; e.files[code] = code === "RFQ" ? out : out[0];
 }
 
+/* إيصالات تعويض المتدربين: إيصال دفع لكل اسم من ملف Excel، تُجمع كلها في PDF واحد */
+async function exGenTrn(p, e, say){
+  const f = e.f || {}, names = trnList(f.trnNames);
+  if(!names.length) throw {code: "tool_error", message: "ارفع ملف Excel بالأسماء أو اكتبها أولاً."};
+  if(!f.rcptDate) throw {code: "tool_error", message: "أدخل تاريخ الإيصالات أولاً."};
+  const T = exTotals(e, true); if(!T.total) throw {code: "tool_error", message: "أدخل مبلغ المصروف أولاً (البنود والأسعار)."};
+  const tpl = await loadX(TPL("exRCPT") || FORM_TPL.RCPT), folder = await exFolder(p, e);
+  e.nums = e.nums || {}; if(!e.nums.TRN) e.nums.TRN = e.nums.RCPT || nextNum(p, "RCPT");
+  const share = trnShare(f.trnNames, T.total), cur = cur0(p), acc = signer(p, "accountant").name, purpose = f.rcptPurpose || e.title;
+  const out = new Array(names.length); let done = 0, next = 0;
+  const work = async () => { while(next < names.length){ const i = next++, nm = names[i];
+    let x = tpl.xml;
+    const c = {K5: dmy(f.rcptDate), K8: `${e.nums.TRN}-${i + 1}`, F10: nm, F12: "متدرب", F14: purpose, F16: share, F18: `${words(share)} ${cur} فقط لا غير`, G21: nm, G25: acc};
+    for(const [ref, v] of Object.entries(c)) x = setCell(x, ref, v);
+    out[i] = await xlsxPdfBytes(await buildX(tpl, x), folder, `إيصال تعويض ${i + 1} - ${nm}`, tpl);
+    say(`جارٍ إنشاء إيصالات المتدربين… ${++done}/${names.length}`); } };
+  await Promise.all([work(), work(), work()]);
+  const doc = await PDFLib.PDFDocument.create();
+  for(const u of out){ const src = await PDFLib.PDFDocument.load(u); (await doc.copyPages(src, src.getPageIndices())).forEach(pg => doc.addPage(pg)); }
+  const base = `إيصالات تعويض المتدربين ${e.nums.TRN} - ${e.title || e.id}`;
+  const up = await upload(new File([await doc.save()], base + ".pdf", {type: "application/pdf"}), folder, base);
+  const old = (e.files || {}).TRN; if(old) await trashSet(old).catch(() => {});
+  e.files = e.files || {}; e.files.TRN = {pdf: up.id, at: today(), count: names.length};
+}
 function exWarnings(p, e){
   const f = e.f || {}, forms = exForms(exCat(p, e)), w = [];
   const seq = [["PR","prDate","طلب الشراء"],["RFQ","rfqDate","إرسال عرض السعر"],["PO","poDate","أمر الشراء"],["CONTRACT","cDate","تحرير العقد"],["CONTRACT","cStart","بداية التنفيذ"],
@@ -2726,12 +2778,12 @@ async function exGenerate(card, codes, say){
     const e = await exSave(card, say), key = card.dataset.exKey;
     const cat = exCat(p, e);
     const list = (codes && codes[0] === "CONTRACT_WORD" ? ["CONTRACT"] : (codes || exForms(cat))).filter(c => (FORM_TPL[c] || c === "CONTRACT") && !(c === "INV" && (e.f || {}).invSrc !== "system"));
-    if(list.includes("RCPT") && !(e.f || {}).rcptDate){ say("أدخل تاريخ الإيصال أولاً.", true); return; }
-    const keep = async () => { e.done = !!(e.files || {}).RCPT; await db.doc("expenses/" + key).set(e); expenses[key] = e; };
+    if((list.includes("RCPT") || list.includes("TRN")) && !(e.f || {}).rcptDate){ say("أدخل تاريخ الإيصال أولاً.", true); return; }
+    const keep = async () => { e.done = !!((e.files || {}).RCPT || (e.files || {}).TRN); await db.doc("expenses/" + key).set(e); expenses[key] = e; };
     try{
       for(const c of list){ if(c === "CONTRACT" && codes && codes[0] === "CONTRACT_WORD"){ await exContract(p, e, say, true); await keep(); continue; } if(c === "CONTRACT"){ if(!(codes || []).includes("CONTRACT") && (e.files || {}).CONTRACT && (e.files.CONTRACT || {}).signed) continue; await exContract(p, e, say); } else await exGenForm(p, e, c, say); await keep(); }
     }catch(err){ await keep().catch(() => {}); throw err; }
-    e.done = !!(e.files || {}).RCPT;
+    e.done = !!((e.files || {}).RCPT || (e.files || {}).TRN);
     await db.doc("expenses/" + key).set(e);
     editing = false; exOpen.add(key); render(true);
     const m = document.querySelector(`[data-ex-key="${CSS.escape(key)}"] .exmsg`); if(m){ m.className = "msg exmsg ok"; m.textContent = "تم الإنشاء."; }
@@ -3279,6 +3331,11 @@ async function makeAllContracts(){
   out.textContent = `أُنشئ ${ok} عقد` + (bad ? `، وتعذّر ${bad}. راجع رسالة كل بطاقة.` : ".");
 }
 document.addEventListener("change", e => {
+  if(e.target.name === "trnFile" && e.target.files && e.target.files[0]){
+    const card = e.target.closest("[data-ex-key]"), ta = card.querySelector('[name="trnNames"]'), info = card.querySelector(".trninfo"); editing = true;
+    trnReadExcel(e.target.files[0]).then(n => { ta.value = n.join("\n"); trnUpd(card); if(!n.length) info.textContent = "لم أجد أسماء في العمود A من A2 وما تحته."; })
+      .catch(() => { info.textContent = "تعذّرت قراءة ملف Excel."; });
+    return; }
   if(e.target.name === "sigfile" && e.target.closest(".sigslot")){ uploadSig(e.target); return; }
   if(e.target.name === "dpreset" || e.target.name === "cpreset"){ const box = e.target.closest(".dutyui") || e.target.closest("fieldset") || e.target.closest(".card");
     const ta = box && box.querySelector(e.target.name === "dpreset" ? '[name="dtext"]' : '[name="cDuties"]'); if(ta && e.target.value){ ta.value = (duties[e.target.value] || []).join("\n"); const nm = box.querySelector(e.target.name === "dpreset" ? '[name="dname"]' : '[name="cname"]'); if(nm) nm.value = e.target.value; } editing = true; }
