@@ -25,6 +25,7 @@
       scope: "https://www.googleapis.com/auth/drive",
       callback: (r) => {
         const p = pendingAuth; pendingAuth = null;
+        if (r && r.access_token && r.scope && !/auth\/drive(\s|$)/.test(r.scope)) { p && p.rej({ message: "لم تُمنح صلاحية الوصول إلى Google Drive. أعد الاتصال وفعّل خيار الدرايف في نافذة Google." }); return; }
         if (r && r.access_token) { token = r.access_token; tokenExp = Date.now() + (Number(r.expires_in) || 3500) * 1000 - 60000; saveAuth(); p && p.res(token); }
         else p && p.rej(r);
       },
@@ -196,7 +197,7 @@
     const blob = new Blob([JSON.stringify(store)], { type: "application/json" });
     let r;
     if (dataFileId) r = await multipart({}, blob, "PATCH", dataFileId);
-    else { r = await multipart({ name: DATA_NAME, parents: [ROOT], mimeType: "application/json" }, blob); dataFileId = r.id; }
+    else throw { code: "no_data", message: "لم يُحمَّل ملف البيانات؛ لن يُحفظ شيء حتى لا يُنشأ ملف فارغ." };
     if (r && r.modifiedTime) knownMod = r.modifiedTime;
     sent.forEach((p) => dirtyPaths.delete(p));
     setStatus("");
@@ -232,6 +233,7 @@
   }
   async function loadData() {
     const f = await findFiles(`'${ROOT}' in parents and name = '${DATA_NAME}' and trashed = false`);
+    if (!f.length) throw { code: "no_data", message: `لم أجد ملف البيانات في مجلد التطبيق بحساب ${email || "Google الحالي"}. تأكد أنك دخلت بالحساب الصحيح، وأنك منحت صلاحية الدرايف كاملة.` };
     if (f.length) { dataFileId = f[0].id; knownMod = f[0].modifiedTime || ""; store = await (await gfetch(`${API}/files/${dataFileId}?alt=media`)).json(); if (!store.docs) store = { docs: {} }; }
     await applyInbox();
   }
@@ -278,19 +280,23 @@
     const el = document.getElementById("acctEmail"); if (el) el.textContent = email;
   }
   async function start(g) { await loadData(); if (g) g.remove(); readyResolve(true); fetchEmail(); }
-  function showGate() {
+  function showGate(err) {
     const g = document.createElement("div"); g.id = "gate";
-    g.innerHTML = `<div class="gate-card"><h2>التوثيقات المالية</h2><p>${email ? "انتهت جلسة الدرايف. اضغط للمتابعة بحساب " + email + "." : "اضغط للاتصال بـ Google Drive. يطلب Google موافقتك في أول مرة فقط."}</p><button type="button" id="gateBtn">${email ? "متابعة" : "الاتصال بالدرايف"}</button><p id="gateMsg" class="msg"></p></div>`;
+    g.innerHTML = `<div class="gate-card"><h2>التوثيقات المالية</h2><p>${email ? "انتهت جلسة الدرايف. اضغط للمتابعة بحساب " + email + "." : "اضغط للاتصال بـ Google Drive. يطلب Google موافقتك في أول مرة فقط."}</p><button type="button" id="gateBtn">${email ? "متابعة" : "الاتصال بالدرايف"}</button>${email ? '<button type="button" id="gateSw" style="margin-inline-start:8px">حساب آخر</button>' : ""}<p id="gateMsg" class="msg">${err ? String(err).replace(/</g, "&lt;") : ""}</p></div>`;
     document.body.appendChild(g);
     document.getElementById("gateBtn").onclick = async () => {
       const m = document.getElementById("gateMsg"); m.textContent = "جارٍ الاتصال…";
       try { await requestToken(email ? "" : "consent"); m.textContent = "جارٍ تحميل البيانات…"; await start(g); }
       catch (e) { m.textContent = "تعذّر الاتصال: " + (e && (e.message || e.type || e.error) || e); }
     };
+    const sw = document.getElementById("gateSw");
+    if (sw) sw.onclick = async () => { const m = document.getElementById("gateMsg"); m.textContent = "جارٍ الاتصال…";
+      try { email = ""; await requestToken("select_account consent"); m.textContent = "جارٍ تحميل البيانات…"; await start(g); }
+      catch (e) { m.textContent = "تعذّر الاتصال: " + (e && (e.message || e.type || e.error) || e); } };
   }
   window.addEventListener("load", async () => {
     if (!CFG.clientId || !window.google) { document.body.insertAdjacentHTML("afterbegin", '<div class="notice err">إعدادات الاتصال ناقصة (Client ID).</div>'); return; }
-    if (token && Date.now() < tokenExp) { try { await start(null); return; } catch (e) { token = null; } }
+    if (token && Date.now() < tokenExp) { try { await start(null); return; } catch (e) { token = null; showGate(e && e.message); return; } }
     showGate();
   });
   window.appAuth = {
