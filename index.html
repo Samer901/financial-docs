@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795184386";</script>
+<script>window.APP_VERSION = "1795354152";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -1424,22 +1424,32 @@ async function signPdf(bytes, marks){
   const res = {done: [], missing: []};
   const want = marks.filter(m => m.sig || m.stamp);
   marks.filter(m => !m.sig).forEach(m => res.missing.push(m.label));
-  if(!want.length || !window.pdfjsLib || !window.PDFLib) return {bytes, ...res};
+  if(!window.pdfjsLib || !window.PDFLib) return {bytes, ...res};
   pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
   const src = await pdfjsLib.getDocument({data: bytes.slice(0)}).promise;
   const out = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true}), imgs = {};
   const img = async id => imgs[id] ||= await out.embedPng(await driveBytes(id));
   const placed = new Set();
-  for(let pi = 1; pi <= src.numPages && placed.size < want.length; pi++){
-    const tc = await (await src.getPage(pi)).getTextContent(), page = out.getPage(pi - 1);
+  for(let pi = 1; pi <= src.numPages; pi++){
+    const sp = await src.getPage(pi), tc = await sp.getTextContent(), page = out.getPage(pi - 1);
+    // إخفاء العلامات المخفية (QX…) التي وُضعت في خانات التوقيع
+    tc.items.filter(it => /^\s*QX[A-Z]+\s*$/.test(it.str || "")).forEach(it => page.drawRectangle({x: it.transform[4] - 1, y: it.transform[5] - 2, width: it.width + 2, height: (it.height || 6) + 3, color: PDFLib.rgb(1, 1, 1)}));
+    let lines = null; const cellAt = async (x, y) => cellBox(lines ||= await pdfLines(sp), x, y);
     for(const m of want){
       if(placed.has(m)) continue;
-      const items = tc.items.filter(it => it.str && m.test(it.str)); if(!items.length) continue;
+      let items = tc.items.filter(it => it.str && m.test(it.str)); if(!items.length) continue;
+      if(items.some(it => /QX[A-Z]+/.test(it.str))) items = items.filter(it => /QX[A-Z]+/.test(it.str)); else items = items.filter(it => !/QX[A-Z]+/.test(it.str));
       placed.add(m);
-      const b = m.box(items.map(it => ({x: it.transform[4], y: it.transform[5], w: it.width, h: it.height})), page);
+      const its = items.map(it => ({x: it.transform[4], y: it.transform[5], w: it.width, h: it.height, str: it.str}));
+      let b = null;
+      if(/QX[A-Z]+/.test(its[0].str)){ // خانة التوقيع من حدود الجدول حول العلامة: المكان والأبعاد معاً
+        const c = await cellAt(its[0].x + its[0].w / 2, its[0].y + (its[0].h || 4) / 2);
+        if(c) b = {cx: (c.x0 + c.x1) / 2, cy: (c.y0 + c.y1) / 2, w: Math.min((c.x1 - c.x0) * 0.8, 45 * MM), h: Math.min((c.y1 - c.y0) * 0.75, 20 * MM), stampDx: -(c.x1 - c.x0) / 2 - 4 * MM, jx: (c.x1 - c.x0) * 0.06, jy: (c.y1 - c.y0) * 0.06};
+      }
+      if(!b) b = m.box(its, page);
       let cx = b.cx, cy = b.cy;
-      if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height) * (1 + rnd(0.12)), w = im.width * sc, h = im.height * sc;
-        cx += rnd(5 * MM); cy += rnd(3 * MM);
+      if(m.sig){ const im = await img(m.sig), sc = Math.min(b.w / im.width, b.h / im.height) * (1 - Math.abs(rnd(0.12))), w = im.width * sc, h = im.height * sc;
+        cx += b.jx !== undefined ? rnd(b.jx) : rnd(5 * MM); cy += b.jy !== undefined ? rnd(b.jy) : rnd(3 * MM);
         page.drawImage(im, {x: cx - w / 2, y: cy - h / 2, width: w, height: h, rotate: PDFLib.degrees(rnd(3))}); res.done.push(m.label); }
       if(m.stamp){ const im = await img(m.stamp), d = 30 * MM, sc = Math.min(d / im.width, d / im.height), w = im.width * sc, h = im.height * sc;
         const sx = b.cx + (b.stampDx ?? b.w * 0.45) + rnd(5 * MM), sy = b.cy + rnd(3 * MM);
@@ -1450,6 +1460,46 @@ async function signPdf(bytes, marks){
   return {bytes: await out.save(), ...res};
 }
 const has = re => s => re.test(s);
+/* خطوط الجدول في صفحة PDF (من أوامر الرسم) لمعرفة حدود الخانات */
+async function pdfLines(pg){
+  const ol = await pg.getOperatorList(), O = pdfjsLib.OPS, segs = [], st = []; let m = [1, 0, 0, 1, 0, 0];
+  const mul = (a, b) => [a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1], a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3], a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5]];
+  const T = (x, y) => [m[0]*x + m[2]*y + m[4], m[1]*x + m[3]*y + m[5]];
+  for(let i = 0; i < ol.fnArray.length; i++){
+    const f = ol.fnArray[i], a = ol.argsArray[i];
+    if(f === O.save) st.push(m); else if(f === O.restore) m = st.pop() || m; else if(f === O.transform) m = mul(m, a);
+    else if(f === O.constructPath){ const ops = a[0], c = a[1]; let k = 0, cur = null, start = null;
+      for(const op of ops){
+        if(op === O.moveTo){ cur = start = T(c[k], c[k+1]); k += 2; }
+        else if(op === O.lineTo){ const p = T(c[k], c[k+1]); k += 2; if(cur) segs.push([cur, p]); cur = p; }
+        else if(op === O.rectangle){ const x = c[k], y = c[k+1], w = c[k+2], h = c[k+3]; k += 4; const q = [T(x, y), T(x + w, y), T(x + w, y + h), T(x, y + h)];
+          if(Math.abs(w) < 3 || Math.abs(h) < 3) segs.push(Math.abs(w) < 3 ? [T(x + w/2, y), T(x + w/2, y + h)] : [T(x, y + h/2), T(x + w, y + h/2)]); else for(let j = 0; j < 4; j++) segs.push([q[j], q[(j + 1) % 4]]); }
+        else if(op === O.closePath){ if(cur && start) segs.push([cur, start]); cur = start; }
+        else if(op === O.curveTo) k += 6; else if(op === O.curveTo2 || op === O.curveTo3) k += 4;
+      } }
+  }
+  return {v: segs.filter(([p, q]) => Math.abs(p[0] - q[0]) < 0.6 && Math.abs(p[1] - q[1]) > 2).map(([p, q]) => ({x: (p[0] + q[0]) / 2, a: Math.min(p[1], q[1]), b: Math.max(p[1], q[1])})),
+          h: segs.filter(([p, q]) => Math.abs(p[1] - q[1]) < 0.6 && Math.abs(p[0] - q[0]) > 2).map(([p, q]) => ({y: (p[1] + q[1]) / 2, a: Math.min(p[0], q[0]), b: Math.max(p[0], q[0])}))};
+}
+function cellBox(L, x, y){
+  const vs = L.v.filter(s => s.a <= y + 0.5 && s.b >= y - 0.5), hs = L.h.filter(s => s.a <= x + 0.5 && s.b >= x - 0.5);
+  const l = vs.filter(s => s.x < x - 0.5).reduce((r, s) => Math.max(r, s.x), -Infinity), r = vs.filter(s => s.x > x + 0.5).reduce((q, s) => Math.min(q, s.x), Infinity);
+  const d = hs.filter(s => s.y < y - 0.5).reduce((q, s) => Math.max(q, s.y), -Infinity), u = hs.filter(s => s.y > y + 0.5).reduce((q, s) => Math.min(q, s.y), Infinity);
+  return [l, r, d, u].every(Number.isFinite) && r - l > 8 && u - d > 6 ? {x0: l, x1: r, y0: d, y1: u} : null;
+}
+/* علامة مخفية في خانة التوقيع الفارغة المجاورة لعنوان التوقيع (في نفس صف العنوان) */
+function sigCellMarks(xml, pairs){
+  const merges = [...xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)].map(m => ({c0: colNum(m[1]), r0: +m[2], c1: colNum(m[3]), r1: +m[4], ref: m[1] + m[2]}));
+  const textOf = ref => { const m = xml.match(new RegExp(`<c r="${ref}"[^>]*?(?:/>|>([\\s\\S]*?)</c>)`)); return m && m[1] ? m[1].replace(/<[^>]+>/g, "").trim() : ""; };
+  for(const [re, code] of pairs){
+    const lab = [...xml.matchAll(/<c r="([A-Z]+)(\d+)"[^>]*?>([\s\S]*?)<\/c>/g)].find(m => re.test(m[3].replace(/<[^>]+>/g, ""))); if(!lab) continue;
+    const lc = colNum(lab[1]), lr = +lab[2], lm = merges.find(g => g.r0 === lr && g.c0 === lc), lend = lm ? lm.c1 : lc;
+    const cand = merges.filter(g => g.r0 === lr && g.c0 > lend && !textOf(g.ref)).sort((a, b) => b.c0 - a.c0)[0];
+    if(cand && new RegExp(`<c r="${cand.ref}"`).test(xml)) xml = setCell(xml, cand.ref, "QX" + code);
+  }
+  return xml;
+}
+const colNum = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
 const below = (dy, w, h) => it => { const x0 = Math.min(...it.map(i => i.x)), x1 = Math.max(...it.map(i => i.x + i.w)); return {cx: (x0 + x1) / 2, cy: it[0].y - dy, w, h}; };
 function sigMark(label, person, test, box, stamp){ return {label, sig: (person && person.sigFileId) || "", stamp: stamp || "", test, box}; }
 /* مواضع التوقيع لكل نموذج */
@@ -1466,8 +1516,8 @@ function payrollMarks(p){
 function voucherMarks(p, id, v){
   const isFin = id === (p.signatories || {}).financePositionCode, giver = isFin ? pmPerson(p) : finPerson(p);
   const cell = (it, page) => ({cx: page.getWidth() * 0.64, cy: it[0].y - 2, w: 30 * MM, h: 9 * MM, stampDx: -22 * MM});
-  return [sigMark("المستلم", v, has(/Recipient/i), cell),
-          sigMark(isFin ? "مدير المشروع (المسلّم)" : "المحاسب", giver, has(/Accountant/i), cell, p.stampFileId)];
+  return [sigMark("المستلم", v, s => /QXR/.test(s) || /Recipient/i.test(s), cell),
+          sigMark(isFin ? "مدير المشروع (المسلّم)" : "المحاسب", giver, s => /QXK/.test(s) || /Accountant/i.test(s), cell, p.stampFileId)];
 }
 function contractMarks(p, pos, v){
   const isPm = pid(pos) === (p.signatories || {}).pmPositionCode;
@@ -1735,7 +1785,7 @@ async function prMake(btn){
       const title = gw(v.gender, pos.title_m, pos.title_f), lv = ((ts.leave || {})[id] || []).length;
       let vx = rep(vt.xml, {DATE: date, NO: `${prMonth.replace("-","")}-${n}`, NAME: v.name, POSITION: title, CURRENCY: `Currency: ${cur}`,
         ANNUAL: lv ? `${lv} يوم` : "N/A", PERIOD: `Pay period: From ${ddmmyyyy(y, m, 1)} to ${date}`, WORDS: `${words(net)} ${cur} فقط لا غير`, ACCOUNTANT: id === inp.finPos ? (pm ? pm.name : "") : (fin ? fin.name : "")});
-      vx = setCell(setCell(vx, "F14", sal), "F24", net);
+      vx = sigCellMarks(setCell(setCell(vx, "F14", sal), "F24", net), [[/Recipient/i, "R"], [/Accountant/i, "K"]]);
       const base = `${pos.code} - ${v.nameEn || v.name}`;
       const vf = await saveXP(await buildX(vt, vx), folder, `إيصال راتب - ${prMonth} - ${base}`, vt, voucherMarks(p, id, v));
       await trashSet(files.vouchers[id]); files.vouchers[id] = vf;
