@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795354152";</script>
+<script>window.APP_VERSION = "1795365858";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795174245"></script>
@@ -1623,9 +1623,46 @@ async function loadX(id){
   return xTpl[id] = {b64, xml: await sheetXml(zip)};
 }
 
+/* ملاءمة الخلايا للنص: كل خلية نصية داخل جدول (لها حدود) يتسع لها النص؛ يُفعَّل الالتفاف ويُرفع ارتفاع الصف عند الحاجة */
+async function fitCells(zip, xml){
+  const sf = zip.file("xl/styles.xml"); if(!sf) return xml;
+  let st = await sf.async("string");
+  const fonts = [...((st.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/) || [])[1] || "").matchAll(/<font\b[^>]*?(?:\/>|>([\s\S]*?)<\/font>)/g)].map(m => { const b = m[1] || ""; return {sz: +((b.match(/<sz val="([\d.]+)"/) || [])[1] || 11), b: /<b\/>|<b val="(1|true)"\/>/.test(b)}; });
+  const xfsM = st.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/); if(!xfsM) return xml;
+  const xfs = [...xfsM[1].matchAll(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/g)].map(m => m[0]);
+  const attr = (t, n) => { const m = t.match(new RegExp(`\\b${n}="([^"]*)"`)); return m ? m[1] : null; };
+  const cn = c => [...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  const fmt = xml.match(/<sheetFormatPr\b[^>]*>/) || [""], dCol = +(attr(fmt[0], "defaultColWidth") || 0) || (+(attr(fmt[0], "baseColWidth") || 8) + 0.71), dRow = +(attr(fmt[0], "defaultRowHeight") || 15);
+  const colW = {}; for(const m of xml.matchAll(/<col ([^>]*)\/>/g)){ const a = m[1], w = /hidden="(1|true)"/.test(a) ? 0 : +(attr(a, "width") || dCol); for(let c = +attr(a, "min"); c <= Math.min(+attr(a, "max"), 200); c++) colW[c] = w; }
+  const rowH = {}; for(const m of xml.matchAll(/<row r="(\d+)"([^>]*)>/g)) rowH[+m[1]] = /hidden="(1|true)"/.test(m[2]) ? 0 : +(attr(m[2], "ht") || dRow);
+  const W = c => colW[c] ?? dCol, H = r => rowH[r] ?? dRow;
+  const merges = {}; for(const m of xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)) merges[m[1] + m[2]] = {c0: cn(m[1]), r0: +m[2], c1: cn(m[3]), r1: +m[4]};
+  const need = {}, wrapXf = {}; let added = 0;
+  const wrapOf = s => { if(wrapXf[s] !== undefined) return wrapXf[s]; const x = xfs[s] || "<xf/>"; if(/wrapText="(1|true)"/.test(x)) return wrapXf[s] = s;
+    let nx = /<alignment\b/.test(x) ? x.replace(/<alignment\b/, '<alignment wrapText="1"') : x.endsWith("/>") ? x.slice(0, -2) + '><alignment wrapText="1" vertical="center"/></xf>' : x.replace(/<\/xf>$/, '<alignment wrapText="1" vertical="center"/></xf>');
+    if(!/applyAlignment=/.test(nx)) nx = nx.replace(/^<xf\b/, '<xf applyAlignment="1"');
+    xfs.push(nx); added++; return wrapXf[s] = xfs.length - 1; };
+  xml = xml.replace(/<c r="([A-Z]+)(\d+)"([^>]*?)>(<is>[\s\S]*?<\/is>)<\/c>/g, (all, col, row, a, is) => {
+    const s = +(attr(a, "s") || 0), x = xfs[s] || ""; if(!+(attr(x, "borderId") || 0)) return all;
+    const text = is.replace(/<rPh\b[\s\S]*?<\/rPh>/g, "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim(); if(!text) return all;
+    const f = fonts[+(attr(x, "fontId") || 0)] || {sz: 11}, mg = merges[col + row] || {c0: cn(col), c1: cn(col), r0: +row, r1: +row};
+    let wpx = 0; for(let c = mg.c0; c <= mg.c1; c++) wpx += W(c) * 7 + (W(c) ? 5 : 0); wpx -= 8; if(wpx <= 10) return all;
+    const pxOf = t => [...t].reduce((n, ch) => n + (/[\u0600-\u06FF]/.test(ch) ? 0.55 : /[A-Z0-9]/.test(ch) ? 0.66 : /\s/.test(ch) ? 0.28 : 0.55), 0) * f.sz * 1.333 * (f.b ? 1.08 : 1);
+    const lines = text.split(/\n/).reduce((n, t) => n + Math.max(1, Math.ceil(pxOf(t) / wpx)), 0);
+    const wrapped = /wrapText="(1|true)"/.test(x);
+    if(lines <= 1 && !/\n/.test(text)) return all;
+    let hh = 0; for(let r = mg.r0; r <= mg.r1; r++) hh += H(r);
+    const req = lines * f.sz * 1.3 + 4; if(req > hh) need[mg.r1] = Math.max(need[mg.r1] || 0, H(mg.r1) + req - hh);
+    return wrapped ? all : `<c r="${col}${row}"${a.replace(/ s="\d+"/, "")} s="${wrapOf(s)}">${is}</c>`;
+  });
+  for(const [r, h] of Object.entries(need)) xml = xml.replace(new RegExp(`<row r="${r}"([^>]*)>`), (all, a) => `<row r="${r}"${a.replace(/ ht="[\d.]+"/, "").replace(/ customHeight="\w+"/, "")} ht="${Math.ceil(h * 4) / 4}" customHeight="1">`);
+  if(added){ st = st.replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/, `<cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>`); zip.file("xl/styles.xml", st); }
+  return xml;
+}
 async function buildX(tpl, xml){
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const zip = await JSZip.loadAsync(tpl.b64, {base64:true});
+  if(!tpl.noFit) xml = await fitCells(zip, xml);
   zip.file("xl/worksheets/sheet1.xml", xml);
   return zip.generateAsync({type:"blob", mimeType: XT, compression:"DEFLATE", compressionOptions:{level:9}});
 }
