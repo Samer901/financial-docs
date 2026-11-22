@@ -63,11 +63,21 @@
     if (gesture() && !authWait) { try { return await renew(); } catch (e) {} }
     return askToContinue();
   }
-  /* تجديد مسبق عند أي ضغطة إذا قاربت الجلسة على الانتهاء (أقل من 15 دقيقة) */
-  document.addEventListener("click", () => {
-    if (!token || pendingAuth || authWait || Date.now() < tokenExp - 15 * 60000) return;
-    renew().catch(() => {});
-  }, true);
+  /* تجديد مسبق مع أي نشاط (ضغطة أو كتابة) إذا بقي أقل من 40 دقيقة: الجلسة لا تنتهي ما دام المستخدم يعمل */
+  let lastTry = 0;
+  const onActivity = () => {
+    if (!token || pendingAuth || authWait || Date.now() < tokenExp - 40 * 60000 || Date.now() - lastTry < 60000) return;
+    lastTry = Date.now(); renew().catch(() => {});
+  };
+  document.addEventListener("click", onActivity, true);
+  document.addEventListener("keydown", onActivity, true);
+  /* تجديد صامت في الخلفية قبل الانتهاء بدقائق (دون نافذة إن سمح المتصفح)؛ إن مُنع يبقى شريط «متابعة العمل» احتياطاً */
+  setInterval(() => {
+    if (!token || pendingAuth || authWait || document.hidden && Date.now() > tokenExp) return;
+    if (Date.now() < tokenExp - 8 * 60000 || Date.now() - lastTry < 3 * 60000) return;
+    lastTry = Date.now();
+    withTimeout(requestToken("none"), 20000).catch(() => { pendingAuth = null; });
+  }, 60000);
 
   async function gfetch(url, opts = {}, retry = true) {
     const t = await getToken();
