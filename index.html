@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795427733";</script>
+<script>window.APP_VERSION = "1795427823";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -2145,8 +2145,9 @@ async function buildDocs(say, kind){
   const mine = all.filter(x => needMerge(x, p.docFiles || {}));
   if(!mine.length){ say("كل المستندات محدّثة، لا شيء يحتاج دمجاً."); return 0; }
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» الظاهر فوق زر الدمج، ثم ادمج."};
+  say("جارٍ تجهيز مجلد التوثيقات في الدرايف…");
   const root = await ensureFolder(DOC_ROOT, await projFolder(p, "project"), "root", p);
-  const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
+  const local = dirHandle && await dirPerm(false), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
   let n = 0;
   // تحميل الملفات بالتوازي مع ذاكرة مؤقتة: الملف المشترك (مثل جدول الرواتب والهويات) يُحمَّل مرة واحدة فقط
@@ -2186,9 +2187,13 @@ async function buildDocs(say, kind){
 const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/folders/${esc(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 
 async function monthAll(btn){
-  if(dirHandle) await dirPerm(true);
   curDocKind = btn.dataset.docmake;
-  const say = (t, err) => { const m = docMsg(); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } if(err) notice("الدمج: " + t, true); };
+  const say = (t, err) => { const m = docMsg(); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } const bar = $("#busybar"); if(bar && !err){ bar.hidden = false; bar.textContent = "الدمج: " + t; } if(err) notice("الدمج: " + t, true); };
+  if(dirHandle && !(await dirPerm(false))){
+    say("اسمح للمتصفح بالحفظ في مجلد الكمبيوتر من النافذة الصغيرة أعلى المتصفح (أو انتظر لنتابع بدونه)…");
+    const ok = await Promise.race([dirPerm(true), new Promise(r => setTimeout(() => r(false), 20000))]);
+    if(!ok) say("سيُحفظ في الدرايف فقط هذه المرة (لم يُسمح بمجلد الكمبيوتر).");
+  }
   btn.disabled = true; editing = true;
   try{ const n = await buildDocs(say, curDocKind); if(n) say(`تم دمج ${n} مستند.`); }
   catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
