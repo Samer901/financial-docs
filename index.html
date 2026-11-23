@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795427559";</script>
+<script>window.APP_VERSION = "1795427733";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -2065,10 +2065,15 @@ function renderDocs(p, kind){
   const todo = mine.filter(x => needMerge(x, df)), nStale = todo.filter(x => df[x.key]).length, nNew = todo.length - nStale;
   setTimeout(() => checkLegacy(p).catch(() => {}));
   box.innerHTML = `<details class="settings panel" open><summary><span>دمج مستندات ${kind === "pay" ? "الموظفين" : "المصاريف"} — ${monLabel(month)}</span></summary>
-    <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}" ${todo.length ? "" : "disabled"}>${todo.length ? `دمج ${[nNew ? `الجديد (${nNew})` : "", nStale ? `المتغيّر (${nStale})` : ""].filter(Boolean).join(" و")}` : "كل المستندات محدّثة"}</button></div>
+    <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}" ${todo.length ? "" : "disabled"}>${todo.length ? `دمج ${[nNew ? `الجديد (${nNew})` : "", nStale ? `المتغيّر (${nStale})` : ""].filter(Boolean).join(" و")}` : mine.length ? "كل المستندات محدّثة" : "لا شيء للدمج في هذا الشهر"}</button></div>
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
-      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : '<p class="empty">لا توجد إيصالات دفع في هذه الفترة.</p>'}
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : (() => {
+      const months = [...new Set(units.filter(x => x.key.startsWith(pre)).map(x => x.month))].sort();
+      const open = kind === "ex" ? exOf(p).filter(e => !((e.files || {}).RCPT || (e.files || {}).TRN)) : [];
+      return `<p class="empty">لا توجد إيصالات دفع في ${monLabel(month)}، فلا شيء يُدمج. يُدمج كل مصروف بعد إنشاء إيصال الدفع له، في شهر تاريخ الإيصال.</p>`
+        + (months.length ? `<div class="row"><span class="code">أشهر فيها مستندات:</span>${months.map(m => `<button type="button" class="chipbtn" data-docjump="${kind}|${m}">${monLabel(m)}</button>`).join("")}<button type="button" class="chipbtn" data-docjump="${kind}|all">كل الأشهر</button></div>` : "")
+        + (open.length ? `<p class="code">بلا إيصال دفع بعد (لن تُدمج حتى يُنشأ الإيصال): ${open.map(e => esc(e.title || e.id)).join("، ")}</p>` : ""); })()}
     ${bad.length ? `<div class="row"><p class="review" style="margin:0">${bad.length} مستند محفوظ برقم قديم. أعد ترقيمها قبل الدمج.</p><button type="button" data-renum="${kind}">إعادة الترقيم (${bad.length})</button></div>` : ""}
     <div class="current">${dirHandle ? "مجلد الكمبيوتر: <strong>" + esc(dirHandle.name) + "</strong> ← " + esc(p.code) : (canPickDir() ? "لم يُحدد مجلد على الكمبيوتر، تُستخدم التنزيلات العادية." : "اختيار مجلد غير مدعوم في هذا المتصفح، تُستخدم التنزيلات العادية.")} ${canPickDir() ? `<button type="button" class="ghost" data-pickdir="${kind}">${dirHandle ? "تغيير المجلد" : "اختيار مجلد الحفظ"}</button>` : ""}</div>
     ${st.links ? `<div class="current">${st.links}</div>` : ""}
@@ -3519,6 +3524,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("click", e => {
   const t = e.target.closest("button"); if(!t) return;
+  if(t.dataset.docjump){ const [k, m] = t.dataset.docjump.split("|"); if(k === "pay") docMonthPay = m; else docMonthEx = m; renderDocs(projects[current], k); return; }
   if(t.dataset.print){ busy(t, async () => { try{ await printFile(t.dataset.print); }catch(err){ const eb = $("#errbox"); eb.hidden = false; eb.textContent = "تعذّرت الطباعة: " + (err && err.message ? err.message : mcpMessage(err)); } }); return; }
   if(t.dataset.pfrep || t.dataset.pfcancel){ const w = t.closest(".pf-have"), nw = w.querySelector(".pf-new"), rep = w.querySelector("[data-pfrep]");
     const on = !!t.dataset.pfrep; nw.hidden = !on; rep.hidden = on; if(!on){ const f = nw.querySelector('input[type="file"]'); if(f) f.value = ""; } editing = true; return; }
