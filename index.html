@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795367461";</script>
+<script>window.APP_VERSION = "1795424539";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -1492,7 +1492,7 @@ function sigCellMarks(xml, pairs){
   const merges = [...xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)].map(m => ({c0: colNum(m[1]), r0: +m[2], c1: colNum(m[3]), r1: +m[4], ref: m[1] + m[2]}));
   const textOf = ref => { const m = xml.match(new RegExp(`<c r="${ref}"[^>]*?(?:/>|>([\\s\\S]*?)</c>)`)); return m && m[1] ? m[1].replace(/<[^>]+>/g, "").trim() : ""; };
   for(const [re, code] of pairs){
-    const lab = [...xml.matchAll(/<c r="([A-Z]+)(\d+)"[^>]*?>([\s\S]*?)<\/c>/g)].find(m => re.test(m[3].replace(/<[^>]+>/g, ""))); if(!lab) continue;
+    const lab = [...xml.matchAll(/<c r="([A-Z]+)(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/c>)/g)].find(m => m[3] && re.test(m[3].replace(/<[^>]+>/g, ""))); if(!lab) continue;
     const lc = colNum(lab[1]), lr = +lab[2], lm = merges.find(g => g.r0 === lr && g.c0 === lc), lend = lm ? lm.c1 : lc;
     const cand = merges.filter(g => g.r0 === lr && g.c0 > lend && !textOf(g.ref)).sort((a, b) => b.c0 - a.c0)[0];
     if(cand && new RegExp(`<c r="${cand.ref}"`).test(xml)) xml = setCell(xml, cand.ref, "QX" + code);
