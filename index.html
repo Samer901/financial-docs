@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795426385";</script>
+<script>window.APP_VERSION = "1795427559";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -2144,19 +2144,25 @@ async function buildDocs(say, kind){
   const local = dirHandle && await dirPerm(true), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
   let n = 0;
+  // تحميل الملفات بالتوازي مع ذاكرة مؤقتة: الملف المشترك (مثل جدول الرواتب والهويات) يُحمَّل مرة واحدة فقط
+  const cache = new Map(), total = mine.reduce((a, x) => a + x.parts.length, 0); let got = 0;
+  const getB = fid => { if(!cache.has(fid)) cache.set(fid, toPdfBytes(fid, root).catch(() => null).finally(() => { got++; })); return cache.get(fid); };
+  const warm = x => x && x.parts.forEach(([, fid]) => getB(fid));
+  const bar = $("#busybar"), prog = t => { say(t); if(bar){ bar.hidden = false; bar.textContent = "الدمج: " + t; } };
+  warm(mine[0]); warm(mine[1]);
   for(const x of mine){
-    n++;
+    n++; warm(mine[n]); warm(mine[n + 1]);
     const merged = await PDFLib.PDFDocument.create(), skipped = [];
     for(const [t, fid, opt] of x.parts){
-      say(`جارٍ دمج المستند ${x.n} (${n}/${mine.length}) — ${t}…`);
-      try{ const bytes = await toPdfBytes(fid, root); if(!bytes){ skipped.push(t); continue; }
+      prog(`المستند ${x.n} (${n} من ${mine.length}) — ${t} · تم تحميل ${Math.min(got, total)} من ${cache.size} ملف`);
+      try{ const bytes = await getB(fid); if(!bytes){ skipped.push(t); continue; }
         const src = await PDFLib.PDFDocument.load(bytes, {ignoreEncryption: true});
         let idx = src.getPageIndices(); if(opt && opt.skipCover && idx.length > 1) idx = idx.slice(1);
         await addA4(merged, src, idx); }
       catch(e){ skipped.push(t); }
     }
     const blob = new Blob([await merged.save()], {type: "application/pdf"}), name = `${x.n}.pdf`;
-    say(`جارٍ حفظ ${name} في الدرايف…`);
+    prog(`جارٍ حفظ ${name} في الدرايف (${n} من ${mine.length})…`);
     const old = docFiles[x.key];
     const up = await upload(new File([blob], name, {type: "application/pdf"}), root, String(x.n));
     if(old && old.id && old.id !== up.id) await trash(old.id).catch(() => {});
@@ -2165,6 +2171,7 @@ async function buildDocs(say, kind){
     else mergedBlobs[x.key] = {blob, name, label: String(x.n), skipped};
     out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
   }
+  if(bar && !busyN) bar.hidden = true;
   await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
   docState[p.code + "__" + kind + month] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
   renderDocs(p, kind);
@@ -2180,6 +2187,7 @@ async function monthAll(btn){
   btn.disabled = true; editing = true;
   try{ const n = await buildDocs(say, curDocKind); if(n) say(`تم دمج ${n} مستند.`); }
   catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
+  { const b = $("#busybar"); if(b && !busyN) b.hidden = true; }
   btn.disabled = false; editing = false;
 }
 
