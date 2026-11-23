@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795428685";</script>
+<script>window.APP_VERSION = "1795429206";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -2166,7 +2166,7 @@ async function buildDocs(say, kind){
   if(docMismatch(p, units).length) throw {code: "tool_error", message: "يوجد مستندات بأرقام قديمة. اضغط «إعادة الترقيم» الظاهر فوق زر الدمج، ثم ادمج."};
   say("جارٍ تجهيز مجلد التوثيقات في الدرايف…");
   const root = await ensureFolder(DOC_ROOT, await projFolder(p, "project"), "root", p);
-  const local = dirHandle && await dirPerm(false), docFiles = {...(p.docFiles || {})}, out = [];
+  const local = dirHandle && await Promise.race([dirPerm(false), new Promise(r => setTimeout(() => r(false), 3000))]), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
   let n = 0, incomplete = 0;
   // تحميل الملفات بالتوازي مع ذاكرة مؤقتة: الملف المشترك (مثل جدول الرواتب والهويات) يُحمَّل مرة واحدة فقط
@@ -2211,7 +2211,9 @@ const dlinkFolder = (id, label) => `<a href="https://drive.google.com/drive/fold
 async function monthAll(btn){
   curDocKind = btn.dataset.docmake;
   const say = (t, err) => { const m = docMsg(); if(m){ m.className = "msg" + (err ? " err" : ""); m.textContent = t; } const bar = $("#busybar"); if(bar && !err){ bar.hidden = false; bar.textContent = "الدمج: " + t; } if(err) notice("الدمج: " + t, true); };
-  if(dirHandle && !(await dirPerm(false))){
+  say("بدأ الدمج…");
+  const permNow = () => Promise.race([dirPerm(false), new Promise(r => setTimeout(() => r(false), 3000))]);
+  if(dirHandle && !(await permNow())){
     say("اسمح للمتصفح بالحفظ في مجلد الكمبيوتر من النافذة الصغيرة أعلى المتصفح (أو انتظر لنتابع بدونه)…");
     const ok = await Promise.race([dirPerm(true), new Promise(r => setTimeout(() => r(false), 20000))]);
     if(!ok) say("سيُحفظ في الدرايف فقط هذه المرة (لم يُسمح بمجلد الكمبيوتر).");
