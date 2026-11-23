@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795429784";</script>
+<script>window.APP_VERSION = "1795432197";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795429784"></script>
@@ -1065,7 +1065,17 @@ async function makeContract(btn){
 /* ===== الأشخاص ===== */
 const PF = [["firstName","الاسم"],["father","اسم الأب"],["lastName","النسبة"],["mother","اسم الأم"],["dob","تاريخ الولادة","date"],["birthPlace","محل الولادة"],
   ["gender","الجنس","g"],["nationality","الجنسية"],["amana","الأمانة"],["qaid","محل القيد"],["nid","الرقم الشخصي"],["cardNo","رقم البطاقة"],
-  ["firstEn","Name (EN)"],["lastEn","Surname (EN)"],["shortName","الاسم في العقود"],["status","حالة البيانات","s"],["notes","ملاحظات"]];
+  ["mobile","الهاتف"],["address","العنوان"],
+  ["nameEn","الاسم الكامل بالإنجليزية"],["shortName","الاسم في العقود"],["status","حالة البيانات","s"],["notes","ملاحظات"]];
+/* تعبئة الحقول من الاسم الكامل إن لم تكن الأجزاء محفوظة (لأشخاص أُضيفوا بالاسم فقط) */
+function personFull(v){
+  const o = {...v}, ar = String(v.name || "").trim().split(/\s+/).filter(Boolean), en = String(v.nameEn || "").trim();
+  if(!o.firstName && ar.length) o.firstName = ar[0];
+  if(!o.lastName && ar.length > 1) o.lastName = ar[ar.length - 1];
+  if(!o.father && ar.length === 3) o.father = ar[1];
+  if(!en && (v.firstEn || v.lastEn)) o.nameEn = [v.firstEn, v.lastEn].filter(Boolean).join(" ");
+  return o;
+}
 
 function renderPeople(){
   const box = $("#peopleBox"); if(!box) return;
@@ -1097,7 +1107,8 @@ function renderPeople(){
   </details>`;
 }
 
-function personForm(k, v){
+function personForm(k, v0){
+  const v = personFull(v0);
   const field = ([f, label, t]) => {
     const val = v[f] ?? "";
     let input;
@@ -1138,7 +1149,7 @@ async function savePerson(btn){
   if(!d.firstName || !d.lastName){ m.className = "msg pmsg err"; m.textContent = "الاسم والنسبة مطلوبان."; return; }
   if(d.nid && Object.entries(people).some(([kk, v]) => kk !== k && v.nid === d.nid)){ m.className = "msg pmsg err"; m.textContent = "هذا الرقم الشخصي مسجّل لشخص آخر."; return; }
   d.name = [d.firstName, d.father, d.lastName].filter(Boolean).join(" ");
-  d.nameEn = [d.firstEn, d.lastEn].filter(Boolean).join(" ");
+  { const ep = d.nameEn.split(/\s+/).filter(Boolean); d.firstEn = ep[0] || ""; d.lastEn = ep.length > 1 ? ep[ep.length - 1] : ""; }
   if(d.status === "read") d.review = "";
   try{ await db.doc("people/" + k).update(d); editPerson = ""; editing = false; render(true); }
   catch(e){ m.className = "msg pmsg err"; m.textContent = "تعذّر الحفظ."; }
