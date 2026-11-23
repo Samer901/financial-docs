@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795424760";</script>
+<script>window.APP_VERSION = "1795426385";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -1455,7 +1455,12 @@ async function signPdf(bytes, marks){
     const sp = await src.getPage(pi), tc = await sp.getTextContent(), page = out.getPage(pi - 1);
     // إخفاء العلامات المخفية (QX…) التي وُضعت في خانات التوقيع
     tc.items.filter(it => /^\s*QX[A-Z]+\s*$/.test(it.str || "")).forEach(it => page.drawRectangle({x: it.transform[4] - 1, y: it.transform[5] - 2, width: it.width + 2, height: (it.height || 6) + 3, color: PDFLib.rgb(1, 1, 1)}));
-    let lines = null; const cellAt = async (x, y) => cellBox(lines ||= await pdfLines(sp), x, y);
+    let lines = null; const cellAt = async (x, y) => { lines ||= await pdfLines(sp); const c = cellBox(lines, x, y);
+      // خط توقيع (سطر أفقي) تحت العلامة مباشرة وأضيق من الخانة المحيطة: يوضع التوقيع فوقه
+      if(c && c.y1 - c.y0 < 30 * MM && c.x1 - c.x0 < 120 * MM) return c;
+      const h = lines.h.filter(s => s.y < y - 1 && s.y > y - 30 && s.b - s.a > 30 && s.a - 120 <= x && x <= s.b + 120).sort((a, b) => b.y - a.y)[0];
+      if(h) return {x0: h.a, x1: h.b, y0: h.y, y1: h.y + 12 * MM};
+      return c; };
     for(const m of want){
       if(placed.has(m)) continue;
       let items = tc.items.filter(it => it.str && m.test(it.str)); if(!items.length) continue;
@@ -1465,7 +1470,7 @@ async function signPdf(bytes, marks){
       let b = null;
       if(/QX[A-Z]+/.test(its[0].str)){ // خانة التوقيع من حدود الجدول حول العلامة: المكان والأبعاد معاً
         const c = await cellAt(its[0].x + its[0].w / 2, its[0].y + (its[0].h || 4) / 2);
-        if(c) b = {cx: (c.x0 + c.x1) / 2, cy: (c.y0 + c.y1) / 2, w: Math.min((c.x1 - c.x0) * 0.8, 45 * MM), h: Math.min((c.y1 - c.y0) * 0.75, 20 * MM), stampDx: -(c.x1 - c.x0) / 2 - 4 * MM, jx: (c.x1 - c.x0) * 0.06, jy: (c.y1 - c.y0) * 0.06};
+        if(c) b = {cx: (c.x0 + c.x1) / 2, cy: (c.y0 + c.y1) / 2, w: Math.min((c.x1 - c.x0) * 0.7, 40 * MM), h: Math.max(Math.min((c.y1 - c.y0) * 0.75, 20 * MM), Math.min(7 * MM, (c.x1 - c.x0) * 0.25)), stampDx: -(c.x1 - c.x0) / 2 - 4 * MM, jx: (c.x1 - c.x0) * 0.06, jy: (c.y1 - c.y0) * 0.06};
       }
       if(!b) b = m.box(its, page);
       let cx = b.cx, cy = b.cy;
@@ -2829,7 +2834,8 @@ async function exGenForm(p, e, code, say){
     let x = tpl.xml;
     for(const [ref, v] of Object.entries(exFill(p, e, code, i))) x = setCell(x, ref, v === undefined ? "" : v);
     const base = `${FORM_CODE[code] || code}${e.nums[code] ? " " + e.nums[code] : ""}${copies > 1 ? " - نسخة " + (i + 1) : ""} - ${e.title || e.id}`;
-    out.push(await saveXP(await buildX(tpl, x), folder, base, tpl));
+    const em = exSigMarks(p, code); for(const [ref, mk] of em.cells) x = putCell(x, ref, mk);
+    out.push(await saveXP(await buildX(tpl, x), folder, base, tpl, em.marks));
   }
   const old = (e.files || {})[code];
   for(const o of [].concat(old || [])) await trashSet(o).catch(() => {});
@@ -2844,13 +2850,16 @@ async function exGenTrn(p, e, say){
   const T = exTotals(e, true); if(!T.total) throw {code: "tool_error", message: "أدخل مبلغ المصروف أولاً (البنود والأسعار)."};
   const tpl = await loadX(TPL("exRCPT") || FORM_TPL.RCPT), folder = await exFolder(p, e);
   e.nums = e.nums || {}; if(!e.nums.TRN) e.nums.TRN = e.nums.RCPT || nextNum(p, "RCPT");
+  const em = exSigMarks(p, "RCPT"); saveXP.missing = [];
   const share = trnShare(f.trnNames, T.total), cur = cur0(p), acc = signer(p, "accountant").name, purpose = f.rcptPurpose || e.title;
   const out = new Array(names.length); let done = 0, next = 0;
   const work = async () => { while(next < names.length){ const i = next++, nm = names[i];
     let x = tpl.xml;
     const c = {K5: dmy(f.rcptDate), K8: `${e.nums.TRN}-${i + 1}`, F10: nm, F12: "متدرب", F14: purpose, F16: share, F18: `${words(share)} ${cur} فقط لا غير`, G21: nm, G25: acc};
     for(const [ref, v] of Object.entries(c)) x = setCell(x, ref, v);
+    for(const [ref, mk] of em.cells) x = putCell(x, ref, mk);
     out[i] = await xlsxPdfBytes(await buildX(tpl, x), folder, `إيصال تعويض ${i + 1} - ${nm}`, tpl);
+    if(em.marks.length){ const sg = await signPdf(out[i], em.marks); out[i] = sg.bytes; if(i === 0) (saveXP.missing ||= []).push(...sg.missing); }
     say(`جارٍ إنشاء إيصالات المتدربين… ${++done}/${names.length}`); } };
   await Promise.all([work(), work(), work()]);
   const doc = await PDFLib.PDFDocument.create();
@@ -2859,6 +2868,18 @@ async function exGenTrn(p, e, say){
   const up = await upload(new File([await doc.save()], base + ".pdf", {type: "application/pdf"}), folder, base);
   const old = (e.files || {}).TRN; if(old) await trashSet(old).catch(() => {});
   e.files = e.files || {}; e.files.TRN = {pdf: up.id, at: today(), count: names.length};
+}
+/* التوقيع الإلكتروني في نماذج المصاريف: لتواقيع الكادر فقط (المورد/المستلم الخارجي يوقّع بيده).
+   علامة مخفية في خانة التوقيع؛ المكان والأبعاد من حدود الخانة في PDF */
+function exSigMarks(p, code){
+  const S = k => personByName(signer(p, k).name), L = {requester: "الطالب", finance: "المراجعة المالية", approver: "المعتمد", receiver: "المستلم", supervisor: "المشرف", accountant: "المحاسب"};
+  const map = {PR: [["C59", "requester"], ["F59", "finance"], ["I59", "approver"]], PO: [["C44", "finance"], ["F44", "approver"]],
+    GRN: [["B62", "receiver"]], SRN: [["B22", "supervisor"]], RCPT: [["K25", "accountant", true]]}[code] || [];
+  const fb = it => ({cx: it[0].x + it[0].w / 2, cy: it[0].y + 2, w: 30 * MM, h: 9 * MM, stampDx: -22 * MM});
+  const cells = [], marks = [];
+  map.forEach(([ref, k, stamp], i) => { const mk = "QXE" + String.fromCharCode(65 + i); cells.push([ref, mk]);
+    marks.push(sigMark(`${L[k]} (${signer(p, k).name || "غير محدد"})`, S(k), s => s.includes(mk), fb, stamp ? p.stampFileId : "")); });
+  return {cells, marks};
 }
 function exWarnings(p, e){
   const f = e.f || {}, forms = exForms(exCat(p, e)), w = [];
