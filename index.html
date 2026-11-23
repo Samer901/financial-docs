@@ -287,7 +287,7 @@ details.excard{border-radius:10px}
     <section id="tab-rep" class="tabpane" hidden><div id="repBox"></div></section>
   </main>
 </div>
-<script>window.APP_VERSION = "1795427823";</script>
+<script>window.APP_VERSION = "1795428685";</script>
 <script src="config.js?v=1794767799"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="platform.js?v=1795367461"></script>
@@ -1960,6 +1960,8 @@ async function toPdfBytes(fileId, folder){
   }
   if(kind === "office"){
     let b64 = ""; for(let i=0;i<u.length;i+=0x8000) b64 += String.fromCharCode.apply(null, u.subarray(i, i+0x8000)); b64 = btoa(b64);
+    const zz = await JSZip.loadAsync(u);
+    if(zz.file("xl/workbook.xml")){ const pg = await pageOf({b64}); return await xlsxPdfBytes(new Blob([pg.range ? await trimForPdf(u, pg.range) : u]), folder, "تحويل مؤقت", {b64, page: {...pg, range: pg.range}}); }
     const gr = await mcp.callTool("Google Drive", "create_file", {title: "تحويل مؤقت", parentId: folder, contentMimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", base64Content: b64});
     const gid = payloadId(gr);
     try{ return await fetchExport(gid); } finally { await trash(gid); }
@@ -2058,6 +2060,23 @@ async function checkLegacy(p){
 }
 const docMismatch = (p, units) => { const map = Object.fromEntries(units.map(x => [x.key, x.n])); return Object.entries(p.docFiles || {}).filter(([k, o]) => map[k] && map[k] !== o.n); };
 
+/* ما ينقص المستند المدموج من مستندات مطلوبة (يظهر في الجدول وبعد الدمج، ويُعاد الدمج تلقائياً عند اكتماله) */
+function unitMissing(p, x){
+  const out = [];
+  if(x.key.startsWith("ex:")){
+    const e = exOf(p).find(y => "ex:" + y.id === x.key); if(!e) return out;
+    const cat = exCat(p, e), files = e.files || {}; if(!cat) return out;
+    for(const [k, v] of Object.entries(cat.docs || {})){ if(v !== "req") continue;
+      if(FORMS.some(f => f[0] === k)){ const o = files[k]; const ok = Array.isArray(o) ? o.length : !!(o && (o.pdf || o.id || o.xlsx)); if(!ok) out.push(FORM_CODE[k] || k); else if(o && !o.pdf && !o.id && !Array.isArray(o)) out.push((FORM_CODE[k] || k) + " (بلا PDF)"); }
+      else if(!attFile(e, k)) out.push(k); }
+  } else {
+    const has = t => x.parts.some(q => q[0] === t);
+    ["إيصال الراتب", "جدول الرواتب", "جدول الدوام", "العقد", "الهوية"].forEach(t => { if(!has(t)) out.push(t); });
+    const id = x.key.split(":")[2], pos = (p.positions || []).find(q => pid(q) === id);
+    if(pos && (pos.req || []).includes("cv") && !has("السيرة الذاتية")) out.push("السيرة الذاتية");
+  }
+  return out;
+}
 function renderDocs(p, kind){
   const box = $(kind === "pay" ? "#docBoxPay" : "#docBoxEx"); if(!box) return;
   const month = kind === "pay" ? docMonthPay : docMonthEx, pre = kind === "pay" ? "pay:" : "ex:";
@@ -2068,7 +2087,7 @@ function renderDocs(p, kind){
     <div class="phead">${monthPick(kind === "pay" ? "docp" : "doce", month, true)}<span class="msg" id="doc-msg-${kind}" aria-live="polite"></span><button type="button" data-docmake="${kind}" ${todo.length ? "" : "disabled"}>${todo.length ? `دمج ${[nNew ? `الجديد (${nNew})` : "", nStale ? `المتغيّر (${nStale})` : ""].filter(Boolean).join(" و")}` : mine.length ? "كل المستندات محدّثة" : "لا شيء للدمج في هذا الشهر"}</button></div>
     <p class="code">كل إيصال دفع مع مرفقاته يُدمج في ملف PDF واحد اسمه رقمه التسلسلي في المشروع (حسب تاريخ الإيصال)، وهو نفسه رقم الحركة في التقرير المالي. يُحفظ في الدرايف ونسخة في مجلد الكمبيوتر.</p>
     ${mine.length ? `<div class="tscroll"><table class="ptab" style="min-width:420px"><thead><tr><th>الرقم</th><th>تاريخ الإيصال</th><th>المستند</th><th>الملف</th></tr></thead><tbody>
-      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : (() => {
+      ${mine.map(x => `<tr><td class="code">${x.n}</td><td class="code">${dmy(x.date)}</td><td>${esc(x.label)}${(m => m.length ? ` <span class="pill err" title="يُدمج بدونها، وعند اكتمالها يظهر «يحتاج إعادة دمج»">ناقص: ${esc(m.join("، "))}</span>` : "")(unitMissing(p, x))}</td><td>${df[x.key] ? dlink(df[x.key].id, df[x.key].n + ".pdf") + (df[x.key].n !== x.n ? ' <span class="pill err">يحتاج إعادة ترقيم</span>' : "") + (isStale(x, df) ? ' <span class="pill err">تغيّر — يحتاج إعادة دمج</span>' : "") + ` <button type="button" class="x" data-deldoc="${esc(x.key)}">حذف</button>` : '<span class="code">لم يُدمج</span>'}</td></tr>`).join("")}</tbody></table></div>` : (() => {
       const months = [...new Set(units.filter(x => x.key.startsWith(pre)).map(x => x.month))].sort();
       const open = kind === "ex" ? exOf(p).filter(e => !((e.files || {}).RCPT || (e.files || {}).TRN)) : [];
       return `<p class="empty">لا توجد إيصالات دفع في ${monLabel(month)}، فلا شيء يُدمج. يُدمج كل مصروف بعد إنشاء إيصال الدفع له، في شهر تاريخ الإيصال.</p>`
@@ -2149,7 +2168,7 @@ async function buildDocs(say, kind){
   const root = await ensureFolder(DOC_ROOT, await projFolder(p, "project"), "root", p);
   const local = dirHandle && await dirPerm(false), docFiles = {...(p.docFiles || {})}, out = [];
   for(const k in mergedBlobs) delete mergedBlobs[k];
-  let n = 0;
+  let n = 0, incomplete = 0;
   // تحميل الملفات بالتوازي مع ذاكرة مؤقتة: الملف المشترك (مثل جدول الرواتب والهويات) يُحمَّل مرة واحدة فقط
   const cache = new Map(), total = mine.reduce((a, x) => a + x.parts.length, 0); let got = 0;
   const getB = fid => { if(!cache.has(fid)) cache.set(fid, toPdfBytes(fid, root).catch(() => null).finally(() => { got++; })); return cache.get(fid); };
@@ -2175,12 +2194,15 @@ async function buildDocs(say, kind){
     docFiles[x.key] = {id: up.id, n: x.n, at: today(), src: srcOf(x)};
     if(local){ try{ await writeToDir(p.code, name, blob); }catch(e){ say("تعذّر الحفظ في مجلد الكمبيوتر: " + (e && e.message || e), true); } }
     else mergedBlobs[x.key] = {blob, name, label: String(x.n), skipped};
-    out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="code">(لم يُدمج: ${esc(skipped.join("، "))})</span>` : ""}`);
+    const miss = unitMissing(p, x);
+    out.push(`${dlink(up.id, name)}${skipped.length ? ` <span class="pill err">تعذّر دمج: ${esc(skipped.join("، "))}</span>` : ""}${miss.length ? ` <span class="pill err">ناقص: ${esc(miss.join("، "))}</span>` : ""}`);
+    if(skipped.length || miss.length) incomplete++;
   }
   if(bar && !busyN) bar.hidden = true;
   await db.doc("projects/" + p.code).update({docFiles}); p.docFiles = docFiles;
   docState[p.code + "__" + kind + month] = {links: out.join(" · ") + (!local && Object.keys(mergedBlobs).length ? ` <button type="button" data-dlall>تنزيل نسخة على الكمبيوتر</button>` : "")};
   renderDocs(p, kind);
+  buildDocs.incomplete = incomplete;
   return mine.length;
 }
 
@@ -2195,7 +2217,7 @@ async function monthAll(btn){
     if(!ok) say("سيُحفظ في الدرايف فقط هذه المرة (لم يُسمح بمجلد الكمبيوتر).");
   }
   btn.disabled = true; editing = true;
-  try{ const n = await buildDocs(say, curDocKind); if(n) say(`تم دمج ${n} مستند.`); }
+  try{ const n = await buildDocs(say, curDocKind); if(n) say(`تم دمج ${n} مستند.` + (buildDocs.incomplete ? ` منها ${buildDocs.incomplete} ناقص (انظر العلامات الحمراء) — يُعاد دمجها بعد إكمال النقص.` : "")); }
   catch(e){ say((e && e.code === "tool_error" && e.message && !e.result ? e.message : mcpMessage(e)) + errDetail(e), true); }
   { const b = $("#busybar"); if(b && !busyN) b.hidden = true; }
   btn.disabled = false; editing = false;
