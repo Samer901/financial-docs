@@ -315,12 +315,23 @@
     },
   };
   /* حالة الملفات: يعيد مجموعة المعرّفات المحذوفة أو الموجودة في السلة */
+  /* الملف محذوف إن كان في السلة أو محذوفاً نهائياً، أو كان أحد المجلدات التي تحتويه في السلة
+     (Drive لا يعلّم الملفات داخل مجلد محذوف بأنها في السلة) */
   async function missingFiles(ids) {
-    const gone = new Set(), list = [...new Set(ids.filter(Boolean))]; let i = 0;
+    const gone = new Set(), list = [...new Set(ids.filter(Boolean))], parentsOf = {}, folderGone = {}; let i = 0;
     async function worker() { while (i < list.length) { const id = list[i++];
-      try { const r = await (await gfetch(`${API}/files/${id}?fields=id,trashed`)).json(); if (r.trashed) gone.add(id); }
+      try { const r = await (await gfetch(`${API}/files/${id}?fields=id,trashed,parents`)).json(); if (r.trashed) gone.add(id); else parentsOf[id] = r.parents || []; }
       catch (e) { if (/Drive 404/.test((e && e.message) || "")) gone.add(id); } } }
     await Promise.all(Array.from({ length: 6 }, worker));
+    async function isGone(fid, depth) {
+      if (!fid || fid === ROOT || depth > 8) return false;
+      if (folderGone[fid] === undefined) folderGone[fid] = (async () => {
+        try { const r = await (await gfetch(`${API}/files/${fid}?fields=id,trashed,parents`)).json(); if (r.trashed) return true;
+          for (const p of r.parents || []) if (await isGone(p, depth + 1)) return true; return false; }
+        catch (e) { return /Drive 404/.test((e && e.message) || ""); } })();
+      return folderGone[fid];
+    }
+    for (const [id, ps] of Object.entries(parentsOf)) { for (const p of ps) if (await isGone(p, 0)) { gone.add(id); break; } }
     return gone;
   }
   async function fileTimes(ids) {
